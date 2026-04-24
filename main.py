@@ -5,10 +5,12 @@ from datetime import datetime
 from typing import Optional
 from packaging.version import parse as parse_version
 
-from fastapi import FastAPI, Request, Header, HTTPException, Depends, UploadFile, Form, status
-from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
+from fastapi import FastAPI, Request, Header, HTTPException, Depends, UploadFile, Form, Body, status
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+
+from pydantic import BaseModel
 
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, event
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
@@ -70,6 +72,7 @@ class Device(Base):
     device_class = Column(String, nullable=False)
     current_version = Column(String)
     track = Column(String, default="prod") # 'prod' or 'dev'
+    status = Column(String, default="pending") # 'pending' or 'approved'
     last_checkin = Column(DateTime, default=datetime.utcnow)
     last_ota_status = Column(String)
 
@@ -134,30 +137,35 @@ def check_update(
     device = db.query(Device).filter(Device.mac_address == x_device_mac).first()
     
     if not device:
-        # First-time registration logic (Normally separate, but auto-added here for simplicity)
+        # First-time registration logic (requires admin approval)
         device = Device(
             mac_address=x_device_mac,
             secret=x_device_secret,
             device_class=x_device_class,
             current_version=x_firmware_version,
             track="prod",
+            status="pending",
             last_checkin=datetime.utcnow()
         )
         db.add(device)
         db.commit()
         db.refresh(device)
+        return JSONResponse(status_code=202, content={"update": False, "message": "Device registered and pending admin approval."})
     else:
         # Authenticate check-in
         if device.secret != x_device_secret:
-            raise HTTPException(status_code=401, detail="Unauthorized")
+            raise HTTPException(status_code=403, detail="Forbidden: Secret mismatch")
             
         # Update check-in record
         device.last_checkin = datetime.utcnow()
         device.current_version = x_firmware_version
         device.device_class = x_device_class
         db.commit()
+        
+        if device.status == "pending":
+            return JSONResponse(status_code=202, content={"update": False, "message": "Still pending approval."})
 
-    # OTA Decision Logic based on track and device_class
+    # OTA Decision Logic based on track and device_class (Only for approved devices)
     latest_firmware = db.query(Firmware).filter(
         Firmware.device_class == device.device_class,
         Firmware.track == device.track
@@ -175,7 +183,46 @@ def check_update(
             print(f"Warning: Missing firmware file at {latest_firmware.file_path}")
 
     # No update required
-    return JSONResponse(status_code=200, content={"update": False})
+    return Response(status_code=204)
+
+
+# ---------------------------------------------------------
+# Request Schemas
+# ---------------------------------------------------------
+class ApproveDeviceRequest(BaseModel):
+    track: str = "prod"
+
+
+@app.post("/admin/devices/{mac_address}/approve")
+def approve_device(
+    mac_address: str,
+    payload: Optional[ApproveDeviceRequest] = Body(None),
+    db: Session = Depends(get_db),
+    admin: str = Depends(verify_admin)
+):
+    """Approve a pending device and optionally assign its release track."""
+    mac_address = mac_address.strip()
+
+    device = db.query(Device).filter(Device.mac_address == mac_address).first()
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found.")
+
+    if device.status == "approved":
+        return JSONResponse(status_code=200, content={"message": "Device is already approved."})
+
+    device.status = "approved"
+    if payload and payload.track in ("prod", "dev"):
+        device.track = payload.track
+    else:
+        device.track = device.track or "prod"
+
+    db.commit()
+    db.refresh(device)
+    return JSONResponse(status_code=200, content={
+        "message": f"Device {mac_address} approved.",
+        "mac_address": mac_address,
+        "track": device.track
+    })
 
 
 @app.post("/admin/upload")

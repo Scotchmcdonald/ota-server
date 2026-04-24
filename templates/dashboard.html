@@ -82,22 +82,76 @@
             </div>
         </aside>
 
-        <!-- Right Main View: Fleet Grid -->
-        <main class="lg:col-span-3">
+        <!-- Right Main View: Fleet Panels -->
+        <main class="lg:col-span-3 space-y-6">
+            {% set pending_devices = devices | selectattr('status', 'equalto', 'pending') | list %}
+            {% set active_devices = devices | selectattr('status', 'equalto', 'approved') | list %}
+
+            <!-- Pending Approval Queue -->
+            <div class="relative glass-panel overflow-hidden rounded-xl shadow-2xl flex flex-col border border-amber-800/40">
+                <div class="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-amber-600 via-amber-400 to-yellow-400"></div>
+                <div class="p-4 border-b border-amber-900/40 flex justify-between items-center bg-slate-800/80 backdrop-blur-sm">
+                    <h2 class="text-xs font-bold text-amber-400 uppercase tracking-widest flex items-center gap-2">
+                        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
+                        Pending Approval Queue
+                    </h2>
+                    <span class="text-[10px] font-mono tracking-wider font-bold text-amber-400 border border-amber-800/40 bg-amber-950/30 px-2 py-0.5 rounded">
+                        {{ pending_devices|length }} AWAITING
+                    </span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-amber-900/30">
+                        <thead class="bg-slate-900/40">
+                            <tr>
+                                <th scope="col" class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">MAC Address</th>
+                                <th scope="col" class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Class</th>
+                                <th scope="col" class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">First Seen</th>
+                                <th scope="col" class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                                <th scope="col" class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-amber-900/20 text-sm bg-slate-800/20">
+                            {% for device in pending_devices %}
+                            <tr class="hover:bg-amber-950/20 transition-colors">
+                                <td class="px-5 py-3.5 whitespace-nowrap text-amber-400 font-mono text-[13px] tracking-tight">{{ device.mac_address }}</td>
+                                <td class="px-5 py-3.5 whitespace-nowrap text-slate-300 text-xs font-mono">{{ device.device_class }}</td>
+                                <td class="px-5 py-3.5 whitespace-nowrap text-slate-400 font-mono text-[11px]">{{ device.last_checkin.strftime('%Y-%m-%d %H:%M:%S') if device.last_checkin else 'NO_DATA' }} Z</td>
+                                <td class="px-5 py-3.5 whitespace-nowrap">
+                                    <span class="px-2 py-0.5 inline-flex text-[10px] leading-4 font-bold rounded bg-amber-950/60 text-amber-400 border border-amber-700/60 uppercase tracking-wider shadow-[0_0_10px_rgba(251,191,36,0.2)]">PENDING</span>
+                                </td>
+                                <td class="px-5 py-3.5 whitespace-nowrap">
+                                    <button onclick="approveDevice('{{ device.mac_address }}')"
+                                            class="px-3 py-1.5 text-[10px] font-bold tracking-wider uppercase rounded bg-emerald-700/80 text-emerald-100 border border-emerald-600/50 hover:bg-emerald-600 hover:shadow-[0_0_12px_rgba(52,211,153,0.4)] active:scale-95 transition-all focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:ring-offset-1 focus:ring-offset-slate-900">
+                                        Approve
+                                    </button>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5" class="px-5 py-8 text-center">
+                                    <p class="font-mono text-xs tracking-widest text-slate-600">NO DEVICES PENDING APPROVAL</p>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Active Fleet Grid -->
             <div class="glass-panel overflow-hidden rounded-xl shadow-2xl flex flex-col border border-slate-700">
                 <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800/80 backdrop-blur-sm">
-                    <h2 class="text-xs font-bold text-slate-300 uppercase tracking-widest">Fleet Telemetry Grid</h2>
+                    <h2 class="text-xs font-bold text-slate-300 uppercase tracking-widest">Active Fleet Grid</h2>
                     <div class="flex items-center space-x-2">
                         <span class="flex h-2.5 w-2.5 relative justify-center items-center">
                             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                             <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
                         </span>
                         <span class="text-[10px] font-mono tracking-wider font-bold text-emerald-400 border border-emerald-800/40 bg-emerald-950/30 px-2 py-0.5 rounded">
-                            {{ devices|length }} NODES ONLINE
+                            {{ active_devices|length }} NODES ACTIVE
                         </span>
                     </div>
                 </div>
-                
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-slate-700/50">
                         <thead class="bg-slate-900/40">
@@ -111,7 +165,7 @@
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-700/30 text-sm bg-slate-800/20">
-                            {% for device in devices %}
+                            {% for device in active_devices %}
                             <tr class="hover:bg-slate-700/40 transition-colors group">
                                 <td class="px-5 py-3.5 whitespace-nowrap text-sky-400 font-mono text-[13px] tracking-tight group-hover:text-sky-300">{{ device.mac_address }}</td>
                                 <td class="px-5 py-3.5 whitespace-nowrap text-slate-300 text-xs font-mono">{{ device.device_class }}</td>
@@ -125,10 +179,9 @@
                                 <td class="px-5 py-3.5 whitespace-nowrap text-slate-200 font-mono text-[13px]">{{ device.current_version }}</td>
                                 <td class="px-5 py-3.5 whitespace-nowrap text-slate-400 font-mono text-[11px]">{{ device.last_checkin.strftime('%Y-%m-%d %H:%M:%S') if device.last_checkin else 'NO_DATA' }} Z</td>
                                 <td class="px-5 py-3.5 whitespace-nowrap">
-                                    {% if not device.last_ota_status or device.last_ota_status == 'OK' %}
-                                    <span class="text-emerald-400/80 font-mono text-[10px] uppercase font-bold tracking-widest">SYS_OK</span>
-                                    {% else %}
-                                    <span class="text-rose-400 font-mono text-[10px] uppercase font-bold tracking-widest bg-rose-950/50 px-1 py-0.5 rounded border border-rose-800">{{ device.last_ota_status }}</span>
+                                    <span class="px-2 py-0.5 inline-flex text-[10px] leading-4 font-bold rounded bg-emerald-950/50 text-emerald-400 border border-emerald-800/50 uppercase tracking-wider shadow-[0_0_10px_rgba(52,211,153,0.15)]">APPROVED</span>
+                                    {% if device.last_ota_status and device.last_ota_status != 'OK' %}
+                                    <span class="ml-1 text-rose-400 font-mono text-[10px] uppercase font-bold tracking-widest bg-rose-950/50 px-1 py-0.5 rounded border border-rose-800">{{ device.last_ota_status }}</span>
                                     {% endif %}
                                 </td>
                             </tr>
@@ -137,7 +190,7 @@
                                 <td colspan="6" class="px-5 py-12 text-center">
                                     <div class="flex flex-col items-center justify-center text-slate-500">
                                         <svg class="h-8 w-8 mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                                        <p class="font-mono text-sm tracking-widest">NO TELEMETRY SIGNALS DETECTED</p>
+                                        <p class="font-mono text-sm tracking-widest">NO ACTIVE NODES IN FLEET</p>
                                     </div>
                                 </td>
                             </tr>
@@ -149,8 +202,27 @@
         </main>
     </div>
 
-    <!-- Clock script -->
     <script>
+        async function approveDevice(mac) {
+            if (!confirm(`Approve device ${mac}?\n\nIt will be assigned to the Production track by default.`)) return;
+            try {
+                const response = await fetch(`/admin/devices/${encodeURIComponent(mac)}/approve`, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ track: 'prod' })
+                });
+                if (response.ok) {
+                    window.location.reload();
+                } else {
+                    const data = await response.json().catch(() => ({}));
+                    alert('Approval failed: ' + (data.detail || response.statusText));
+                }
+            } catch (err) {
+                alert('Network error: ' + err.message);
+            }
+        }
+
         function updateTime() {
             document.getElementById('clock').textContent = new Date().toISOString().replace('T', ' ').substring(0, 19) + ' ZULU';
         }
