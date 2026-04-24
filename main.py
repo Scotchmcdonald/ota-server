@@ -230,8 +230,9 @@ def admin_dashboard(request: Request, db: Session = Depends(get_db), admin: str 
     """Dashboard UI returning Jinja templates populated with DB facts"""
     devices = db.query(Device).all()
     firmwares = db.query(Firmware).order_by(Firmware.id.desc()).all()
-    return templates.TemplateResponse("dashboard.html", {
-        "request": request, 
-        "devices": devices, 
-        "firmwares": firmwares
-    })
+    return templates.TemplateResponse(
+        request=request, name="dashboard.html", context={
+            "devices": devices, 
+            "firmwares": firmwares
+        }
+    )
