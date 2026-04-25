@@ -172,7 +172,9 @@ async def auth_callback(request: Request, db: Session = Depends(get_db)):
     stores minimal user info in the encrypted session cookie.
     """
     try:
-        token = await oauth.google.authorize_access_token(request)
+        token = await oauth.google.authorize_access_token(
+            request, redirect_uri=GOOGLE_OAUTH_REDIRECT_URI
+        )
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
