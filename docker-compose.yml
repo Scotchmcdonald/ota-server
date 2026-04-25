@@ -4,8 +4,13 @@ services:
     container_name: esp32-ota-server
     restart: unless-stopped
     environment:
-      - ADMIN_USERNAME=admin
-      - ADMIN_PASSWORD=admin
+      # ── Google OAuth ── obtain from https://console.cloud.google.com/apis/credentials
+      - GOOGLE_CLIENT_ID=YOUR_GOOGLE_CLIENT_ID
+      - GOOGLE_CLIENT_SECRET=YOUR_GOOGLE_CLIENT_SECRET
+      # ── Admin whitelist ── comma-separated list of permitted Google emails
+      - ADMIN_EMAILS=you@gmail.com
+      # ── Session signing key ── generate once with: python -c "import secrets; print(secrets.token_urlsafe(32))"
+      - SESSION_SECRET_KEY=CHANGE_ME_TO_A_RANDOM_64_CHAR_STRING
     ports:
       - "8321:8000"
     volumes:
