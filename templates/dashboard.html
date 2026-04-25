@@ -1,570 +1,511 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flight Deck // ESP32 OTA Central</title>
+    <title>Flight Deck // Fleet Command</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #0f172a; color: #f8fafc; }
         .glass-panel {
             background: rgba(30, 41, 59, 0.7);
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(12px);
             border: 1px solid rgba(51, 65, 85, 0.8);
         }
-        .header-glow { text-shadow: 0 0 10px rgba(56, 189, 248, 0.4); }
-        .key-flash { animation: fadeIn 0.4s ease-in; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+        .header-glow { text-shadow: 0 0 12px rgba(56, 189, 248, 0.5); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
     </style>
 </head>
-<body class="antialiased min-h-screen font-sans flex flex-col">
+<body class="antialiased min-h-screen font-sans flex flex-col selection:bg-sky-500/30">
 
     <!-- ═══════════════════════════ NAVBAR ═══════════════════════════ -->
-    <nav class="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-30">
+    <nav class="bg-slate-900/90 backdrop-blur border-b border-slate-800 p-4 sticky top-0 z-50 shadow-2xl">
         <div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
             <div class="flex items-center space-x-3">
-                <svg class="w-8 h-8 text-sky-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                <h1 class="text-2xl font-bold tracking-widest text-slate-100 header-glow uppercase">OTA // COMMAND</h1>
+                <svg class="w-8 h-8 text-sky-500 shrink-0 drop-shadow-[0_0_8px_rgba(14,165,233,0.8)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"></path>
+                </svg>
+                <h1 class="text-2xl font-bold tracking-widest text-slate-100 header-glow uppercase">FLIGHT // DECK</h1>
             </div>
-            <div class="flex items-center gap-5">
-                <div class="text-slate-400 font-mono text-sm tracking-wide hidden sm:block">
-                    SYS.TIME: <span id="clock"></span>
+            
+            <div class="flex items-center gap-6">
+                <!-- TABS (Desktop) -->
+                <div class="hidden md:flex rounded-lg bg-slate-800/50 p-1 border border-slate-700/50" id="desktop-tabs">
+                    <button class="tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-sky-400 bg-slate-700/50 shadow" data-target="tab-onboard">Onboard</button>
+                    <button class="tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-700/30" data-target="tab-deploy">Deploy</button>
+                    <button class="tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-700/30" data-target="tab-fleet">Fleet</button>
+                    {% if user and user.role == 'Admin' %}
+                    <button class="tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-rose-400 hover:text-rose-200 hover:bg-slate-700/30" data-target="tab-admin">Admin</button>
+                    {% endif %}
                 </div>
-                <!-- ── Authenticated user badge ── -->
-                <div class="flex items-center gap-3 bg-slate-800/70 border border-slate-700 rounded-lg px-3 py-1.5">
-                    <div class="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]"></div>
-                    <span class="text-slate-300 text-xs font-mono tracking-wide truncate max-w-[180px]">{{ user.email }}</span>
-                    <a href="/logout"
-                       class="text-[10px] font-bold tracking-wider uppercase text-rose-400 hover:text-rose-300 border border-rose-800/50 hover:border-rose-600 bg-rose-950/30 hover:bg-rose-950/60 px-2 py-0.5 rounded transition-all">
-                        Logout
-                    </a>
+
+                <div class="text-slate-400 font-mono text-sm tracking-wide hidden lg:block">
+                    SYS: <span id="clock" class="text-sky-300"></span>
+                </div>
+
+                <div class="flex items-center gap-3 bg-slate-800/80 border border-slate-700 rounded-lg px-3 py-1.5 shadow-inner">
+                    <div class="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)] animate-pulse"></div>
+                    <span class="text-slate-300 text-xs font-mono tracking-wide">{{ user.email if user else 'Operator' }}</span>
+                    {% if user and user.role == 'Admin' %}
+                        <span class="text-[9px] font-bold uppercase bg-rose-900/50 text-rose-400 px-1.5 py-0.5 rounded border border-rose-800/50">Admin</span>
+                    {% endif %}
+                    <a href="/logout" class="ml-2 text-[10px] font-bold tracking-wider uppercase text-slate-400 hover:text-rose-400 transition-colors">Log Out</a>
                 </div>
             </div>
         </div>
+        
+        <!-- TABS (Mobile) -->
+        <div class="md:hidden flex overflow-x-auto mt-4 gap-2 pb-2" id="mobile-tabs">
+            <button class="tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-sky-400 bg-slate-700/50 shadow" data-target="tab-onboard">Onboard</button>
+            <button class="tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-slate-400 bg-slate-800/50" data-target="tab-deploy">Deploy</button>
+            <button class="tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-slate-400 bg-slate-800/50" data-target="tab-fleet">Fleet</button>
+            {% if user and user.role == 'Admin' %}
+            <button class="tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-rose-400 bg-slate-800/50" data-target="tab-admin">Admin</button>
+            {% endif %}
+        </div>
     </nav>
 
-    <!-- ══════════════════════════ MAIN LAYOUT ═══════════════════════ -->
-    <div class="flex-grow max-w-7xl mx-auto w-full p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-4 gap-6 items-start mt-6">
+    <!-- ══════════════════════════ MAIN CONTENT ═══════════════════════ -->
+    <main class="flex-grow max-w-7xl mx-auto w-full p-4 sm:p-6 mt-2">
 
-        <!-- ─── Left Sidebar ─── -->
-        <aside class="lg:col-span-1 space-y-6 lg:sticky lg:top-24">
-
-            <!-- ── Deploy Payload ── -->
-            <div class="glass-panel p-5 rounded-xl shadow-2xl relative overflow-hidden">
-                <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-sky-600 via-sky-400 to-emerald-400"></div>
-                <h2 class="text-xs font-bold text-slate-300 uppercase tracking-widest mb-5 border-b border-slate-700/50 pb-2">Deploy Payload</h2>
-                <form action="/admin/upload" method="POST" enctype="multipart/form-data" class="space-y-4">
-                    <div>
-                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Target Class</label>
-                        <input type="text" name="device_class" placeholder="sensor_node_v1" required
-                               class="block w-full bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-sky-500 focus:border-sky-500 text-slate-200 transition-colors">
-                    </div>
-                    <div>
-                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Version Tuple</label>
-                        <input type="text" name="version" placeholder="1.0.3" required
-                               class="block w-full bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm font-mono focus:ring-1 focus:ring-sky-500 focus:border-sky-500 text-slate-200 transition-colors">
-                    </div>
-                    <div>
-                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Release Track</label>
-                        <select name="track" class="block w-full bg-slate-800/80 border border-slate-700 rounded-md py-2 pl-3 pr-8 text-sm focus:ring-1 focus:ring-sky-500 focus:border-sky-500 appearance-none text-slate-200">
-                            <option value="prod">Production</option>
-                            <option value="dev">Development</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Binary File (.bin)</label>
-                        <label class="flex flex-col border border-dashed border-slate-600 rounded-lg w-full h-20 group text-center cursor-pointer bg-slate-800/30 hover:bg-slate-800/80 hover:border-sky-500 transition-all">
-                            <div class="h-full w-full flex flex-col items-center justify-center p-2" id="drop-zone-content">
-                                <svg class="h-5 w-5 text-slate-500 mb-1 group-hover:text-sky-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-                                <p class="text-[10px] text-slate-400 font-mono tracking-wide pointer-events-none"><span class="text-sky-500 font-semibold group-hover:text-sky-400">SELECT .BIN</span> or drag</p>
-                            </div>
-                            <input type="file" name="file" accept=".bin" required class="hidden"
-                                   onchange="document.getElementById('drop-zone-content').innerHTML = '<p class=\'text-sky-400 text-xs font-mono font-bold pt-6 px-2 truncate block w-full\' title=\'' + this.files[0].name + '\'>' + this.files[0].name + '</p>'" />
-                        </label>
-                    </div>
-                    <div class="pt-2">
-                        <button type="submit" class="w-full flex items-center justify-center rounded-md p-2.5 text-xs font-bold tracking-widest uppercase text-white bg-sky-600/90 hover:bg-sky-500 shadow-[0_0_15px_rgba(2,132,199,0.4)] focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2 focus:ring-offset-slate-900 transition-all">
-                            Execute Push
-                        </button>
-                    </div>
-                </form>
+        <!-- ──────────────── TAB 1: ONBOARD ──────────────── -->
+        <section id="tab-onboard" class="tab-content active space-y-6">
+            <div class="flex justify-between items-end border-b border-slate-800 pb-4">
+                <div>
+                    <h2 class="text-2xl font-light text-slate-200">Device Discovery</h2>
+                    <p class="text-sm text-slate-500 font-mono mt-1">Unclaimed nodes awaiting assignment</p>
+                </div>
+                <button onclick="refreshData(event)" class="text-sky-400 hover:text-sky-300 focus:outline-none flex items-center gap-2 text-xs uppercase font-bold tracking-wider">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                    Scan
+                </button>
             </div>
 
-            <!-- ── API Key Management ── -->
-            <div class="glass-panel p-5 rounded-xl shadow-2xl relative overflow-hidden">
-                <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-violet-600 via-purple-500 to-fuchsia-500"></div>
-                <h2 class="text-xs font-bold text-slate-300 uppercase tracking-widest mb-1 border-b border-slate-700/50 pb-2">API Keys</h2>
-                <p class="text-[10px] text-slate-500 font-mono mb-4">Used with <code class="text-violet-400">X-Admin-Key</code> header for CI/CD and VS Code uploads.</p>
-
-                <!-- ── New key flash banner (shown once after generation) ── -->
-                {% if new_key %}
-                <div class="key-flash mb-4 bg-emerald-950/60 border border-emerald-700/60 rounded-lg p-3">
-                    <p class="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a1 1 0 100 2 2 2 0 012 2 1 1 0 102 0 4 4 0 00-4-4z" clip-rule="evenodd"></path></svg>
-                        New Key — Copy Now!
-                    </p>
-                    <p class="text-[10px] text-amber-300 font-mono mb-2">This is the only time this key will be shown.</p>
-                    <div class="flex items-center gap-2">
-                        <code id="new-key-value" class="block bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-[11px] font-mono text-emerald-300 break-all flex-1">{{ new_key }}</code>
-                        <button onclick="copyNewKey()"
-                                class="shrink-0 p-1.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white transition-colors focus:outline-none focus:ring-1 focus:ring-emerald-400"
-                                title="Copy to clipboard">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
-                        </button>
-                    </div>
-                </div>
-                {% endif %}
-
-                <!-- ── Active keys list ── -->
-                <div class="space-y-2 mb-4 max-h-48 overflow-y-auto pr-1">
-                    {% for key in api_keys %}
-                    <div class="flex items-center justify-between bg-slate-800/60 border border-slate-700/60 rounded-lg px-3 py-2 gap-2">
-                        <div class="min-w-0">
-                            <p class="text-[10px] font-mono text-slate-400 truncate">{{ key.label or "Unnamed key" }}</p>
-                            <p class="text-[10px] font-mono text-slate-600 mt-0.5">ID #{{ key.id }} · {{ key.key_hash[:12] }}…</p>
-                        </div>
-                        <form action="/admin/delete-key/{{ key.id }}" method="POST" class="shrink-0"
-                              onsubmit="return confirm('Revoke this API key? Any automation using it will stop working.')">
-                            <button type="submit"
-                                    class="text-[10px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-800/50 hover:bg-rose-700/80 bg-rose-950/30 px-2 py-1 rounded transition-all focus:outline-none focus:ring-1 focus:ring-rose-500">
-                                Revoke
-                            </button>
-                        </form>
-                    </div>
-                    {% else %}
-                    <p class="text-center font-mono text-xs tracking-widest text-slate-600 py-4">NO ACTIVE KEYS</p>
-                    {% endfor %}
-                </div>
-
-                <!-- ── Generate button ── -->
-                <form action="/admin/generate-key" method="POST">
-                    <button type="submit"
-                            class="w-full flex items-center justify-center gap-2 rounded-md p-2.5 text-xs font-bold tracking-widest uppercase text-white bg-violet-700/90 hover:bg-violet-600 shadow-[0_0_15px_rgba(124,58,237,0.35)] focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 focus:ring-offset-slate-900 transition-all">
-                        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"></path></svg>
-                        Generate New Key
-                    </button>
-                </form>
+            <div class="glass-panel overflow-hidden rounded-xl shadow-2xl relative border-t border-t-amber-500/30">
+                <table class="min-w-full divide-y divide-slate-800">
+                    <thead class="bg-slate-900/50">
+                        <tr>
+                            <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Target MAC</th>
+                            <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Initial Ping</th>
+                            <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>
+                            <th class="px-6 py-4 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/50 text-sm bg-slate-900/20">
+                        {% for device in unclaimed_devices|default([{'mac_address': 'A0:B1:C2:D3:E4:F5', 'last_seen': '2 mins ago'}]) %}
+                        <tr class="hover:bg-slate-800/40 transition-colors">
+                            <td class="px-6 py-4 whitespace-nowrap text-amber-400 font-mono text-sm tracking-widest">{{ device.mac_address }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-slate-400 font-mono text-xs">{{ device.last_seen | default('Unknown') }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 py-1 text-[10px] font-bold rounded-sm bg-amber-950/60 text-amber-500 border border-amber-800/50 uppercase tracking-widest animate-pulse">Unclaimed</span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right">
+                                <button onclick="openClaimModal('{{ device.mac_address }}')" class="px-4 py-2 text-xs font-bold tracking-widest uppercase rounded bg-sky-600/20 text-sky-400 border border-sky-500/50 hover:bg-sky-500 hover:text-white hover:shadow-[0_0_15px_rgba(14,165,233,0.4)] transition-all">
+                                    Claim Node
+                                </button>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="px-6 py-12 text-center text-slate-500 font-mono text-sm tracking-widest">NO UNCLAIMED NODES DETECTED</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
-        </aside>
+        </section>
 
-        <!-- ─── Right Main View ─── -->
-        <main class="lg:col-span-3 space-y-6">
-            {% set pending_devices = devices | selectattr('status', 'equalto', 'pending') | list %}
-            {% set active_devices  = devices | selectattr('status', 'equalto', 'approved') | list %}
-
-            <!-- ── Pending Approval Queue ── -->
-            <div class="relative glass-panel overflow-hidden rounded-xl shadow-2xl flex flex-col border border-amber-800/40">
-                <div class="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-amber-600 via-amber-400 to-yellow-400"></div>
-                <div class="p-4 border-b border-amber-900/40 flex justify-between items-center bg-slate-800/80 backdrop-blur-sm">
-                    <h2 class="text-xs font-bold text-amber-400 uppercase tracking-widest flex items-center gap-2">
-                        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
-                        Pending Approval Queue
-                    </h2>
-                    <span class="text-[10px] font-mono tracking-wider font-bold text-amber-400 border border-amber-800/40 bg-amber-950/30 px-2 py-0.5 rounded">
-                        {{ pending_devices|length }} AWAITING
-                    </span>
+        <!-- ──────────────── TAB 2: DEPLOY ──────────────── -->
+        <section id="tab-deploy" class="tab-content space-y-6">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-slate-800 pb-4 gap-4">
+                <div>
+                    <h2 class="text-2xl font-light text-slate-200">Payload Deployment</h2>
+                    <p class="text-sm text-slate-500 font-mono mt-1">Available firmware binaries for OTA push</p>
                 </div>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-amber-900/30">
-                        <thead class="bg-slate-900/40">
-                            <tr>
-                                <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">MAC Address</th>
-                                <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Class</th>
-                                <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">First Seen</th>
-                                <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                                <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-amber-900/20 text-sm bg-slate-800/20">
-                            {% for device in pending_devices %}
-                            <tr class="hover:bg-amber-950/20 transition-colors">
-                                <td class="px-5 py-3.5 whitespace-nowrap text-amber-400 font-mono text-[13px] tracking-tight">{{ device.mac_address }}</td>
-                                <td class="px-5 py-3.5 whitespace-nowrap text-slate-300 text-xs font-mono">{{ device.device_class }}</td>
-                                <td class="px-5 py-3.5 whitespace-nowrap text-slate-400 font-mono text-[11px]">{{ device.last_checkin.strftime('%Y-%m-%d %H:%M:%S') if device.last_checkin else 'NO_DATA' }} Z</td>
-                                <td class="px-5 py-3.5 whitespace-nowrap">
-                                    <span class="px-2 py-0.5 inline-flex text-[10px] leading-4 font-bold rounded bg-amber-950/60 text-amber-400 border border-amber-700/60 uppercase tracking-wider shadow-[0_0_10px_rgba(251,191,36,0.2)]">PENDING</span>
-                                </td>
-                                <td class="px-5 py-3.5 whitespace-nowrap">
-                                    <button onclick="approveDevice('{{ device.mac_address }}')"
-                                            class="px-3 py-1.5 text-[10px] font-bold tracking-wider uppercase rounded bg-emerald-700/80 text-emerald-100 border border-emerald-600/50 hover:bg-emerald-600 hover:shadow-[0_0_12px_rgba(52,211,153,0.4)] active:scale-95 transition-all focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:ring-offset-1 focus:ring-offset-slate-900">
-                                        Approve
-                                    </button>
-                                </td>
-                            </tr>
-                            {% else %}
-                            <tr>
-                                <td colspan="5" class="px-5 py-8 text-center">
-                                    <p class="font-mono text-xs tracking-widest text-slate-600">NO DEVICES PENDING APPROVAL</p>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                
+                <div class="flex flex-wrap gap-3">
+                    <select id="deploy-scope-filter" class="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-md px-3 py-1.5 focus:ring-1 focus:ring-sky-500 outline-none">
+                        <option value="all">All Scopes</option>
+                        <option value="personal">Personal</option>
+                        <option value="team-alpha">Team Alpha</option>
+                    </select>
+                    <select id="deploy-label-filter" class="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-md px-3 py-1.5 focus:ring-1 focus:ring-sky-500 outline-none">
+                        <option value="all">All Labels</option>
+                        <option value="stable">Stable</option>
+                        <option value="beta">Beta</option>
+                    </select>
                 </div>
             </div>
 
-            <!-- ── Active Fleet Grid ── -->
-            <div class="glass-panel overflow-hidden rounded-xl shadow-2xl flex flex-col border border-slate-700">
-                <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800/80 backdrop-blur-sm">
-                    <h2 class="text-xs font-bold text-slate-300 uppercase tracking-widest">Active Fleet Grid</h2>
-                    <div class="flex items-center space-x-2">
-                        <span class="flex h-2.5 w-2.5 relative justify-center items-center">
-                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                            <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-                        </span>
-                        <span class="text-[10px] font-mono tracking-wider font-bold text-emerald-400 border border-emerald-800/40 bg-emerald-950/30 px-2 py-0.5 rounded">
-                            {{ active_devices|length }} NODES ACTIVE
-                        </span>
-                    </div>
+            <div class="glass-panel overflow-hidden rounded-xl shadow-2xl">
+                <table class="min-w-full divide-y divide-slate-800" id="deploy-table">
+                    <thead class="bg-slate-900/50">
+                        <tr>
+                            <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Version Tuple</th>
+                            <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Scope</th>
+                            <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Labels</th>
+                            <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Uploaded</th>
+                            <th class="px-6 py-4 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/50 text-sm bg-slate-900/20">
+                        {% for fw in firmwares|default([{'version': 'v1.4.2', 'scope': 'team-alpha', 'labels': ['stable'], 'date': '2026-04-24'}, {'version': 'v2.0.0-beta', 'scope': 'personal', 'labels': ['beta'], 'date': '2026-04-25'}]) %}
+                        <tr class="hover:bg-slate-800/40 transition-colors fw-row" data-scope="{{ fw.scope|lower }}" data-labels="{{ fw.labels|join(',')|lower }}">
+                            <td class="px-6 py-4 whitespace-nowrap text-sky-400 font-mono text-sm font-bold">{{ fw.version }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-slate-300 text-xs uppercase tracking-wider">{{ fw.scope }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap flex gap-1">
+                                {% for label in fw.labels %}
+                                    <span class="px-2 py-0.5 text-[9px] font-bold rounded-full bg-slate-800 text-slate-300 border border-slate-600 uppercase">{{ label }}</span>
+                                {% endfor %}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-slate-500 font-mono text-xs">{{ fw.date }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right">
+                                <button class="px-3 py-1.5 text-[10px] font-bold tracking-widest uppercase rounded bg-emerald-900/40 text-emerald-400 border border-emerald-700/50 hover:bg-emerald-600 hover:text-white transition-all">Distribute</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ──────────────── TAB 3: FLEET ──────────────── -->
+        <section id="tab-fleet" class="tab-content space-y-6">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-slate-800 pb-4 gap-4">
+                <div>
+                    <h2 class="text-2xl font-light text-slate-200">Fleet Operations</h2>
+                    <p class="text-sm text-slate-500 font-mono mt-1">Live telemetry and state of claimed nodes</p>
                 </div>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-slate-700/50">
-                        <thead class="bg-slate-900/40">
-                            <tr>
-                                <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">MAC Address</th>
-                                <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Class</th>
-                                <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Track</th>
-                                <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Version</th>
-                                <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Battery</th>
-                                <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Last Ping</th>
-                                <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-700/30 text-sm bg-slate-800/20">
-                            {% for device in active_devices %}
-                            <tr class="hover:bg-slate-700/40 transition-colors group">
-                                <td class="px-5 py-3.5 whitespace-nowrap text-sky-400 font-mono text-[13px] tracking-tight group-hover:text-sky-300">{{ device.mac_address }}</td>
-                                <td class="px-5 py-3.5 whitespace-nowrap text-slate-300 text-xs font-mono">{{ device.device_class }}</td>
-                                <td class="px-5 py-3.5 whitespace-nowrap">
-                                    {% if device.track == 'prod' %}
-                                    <span class="px-2 py-0.5 inline-flex text-[10px] leading-4 font-bold rounded bg-emerald-950/50 text-emerald-400 border border-emerald-800/50 uppercase tracking-wider shadow-[0_0_10px_rgba(52,211,153,0.15)]">PROD</span>
-                                    {% else %}
-                                    <span class="px-2 py-0.5 inline-flex text-[10px] leading-4 font-bold rounded bg-cyan-950/50 text-cyan-400 border border-cyan-800/50 uppercase tracking-wider shadow-[0_0_10px_rgba(34,211,238,0.15)]">DEV</span>
-                                    {% endif %}
-                                </td>
-                                <td class="px-5 py-3.5 whitespace-nowrap text-slate-200 font-mono text-[13px]">{{ device.current_version }}</td>
-                                <td class="px-5 py-3.5 whitespace-nowrap text-slate-400 font-mono text-[11px]">
-                                    {% if device.battery_level %}
-                                        <span class="{% if device.battery_level | float(default=100) < 20 %}text-rose-400{% elif device.battery_level | float(default=100) < 50 %}text-amber-400{% else %}text-emerald-400{% endif %}">
-                                            {{ device.battery_level }}%
-                                        </span>
-                                    {% else %}
-                                        <span class="text-slate-600">—</span>
-                                    {% endif %}
-                                </td>
-                                <td class="px-5 py-3.5 whitespace-nowrap text-slate-400 font-mono text-[11px]">{{ device.last_checkin.strftime('%Y-%m-%d %H:%M:%S') if device.last_checkin else 'NO_DATA' }} Z</td>
-                                <td class="px-5 py-3.5 whitespace-nowrap">
-                                    <span class="px-2 py-0.5 inline-flex text-[10px] leading-4 font-bold rounded bg-emerald-950/50 text-emerald-400 border border-emerald-800/50 uppercase tracking-wider shadow-[0_0_10px_rgba(52,211,153,0.15)]">APPROVED</span>
-                                    {% if device.last_ota_status and device.last_ota_status != 'OK' %}
-                                    <span class="ml-1 text-rose-400 font-mono text-[10px] uppercase font-bold tracking-widest bg-rose-950/50 px-1 py-0.5 rounded border border-rose-800">{{ device.last_ota_status }}</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% else %}
-                            <tr>
-                                <td colspan="7" class="px-5 py-12 text-center">
-                                    <div class="flex flex-col items-center justify-center text-slate-500">
-                                        <svg class="h-8 w-8 mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                                        <p class="font-mono text-sm tracking-widest">NO ACTIVE NODES IN FLEET</p>
+                
+                <div class="flex flex-wrap gap-3">
+                    <select id="fleet-scope-filter" class="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-md px-3 py-1.5 focus:ring-1 focus:ring-sky-500">
+                        <option value="all">All Scopes</option>
+                        <option value="personal">Personal</option>
+                        <option value="team-alpha">Team Alpha</option>
+                    </select>
+                    <select id="fleet-label-filter" class="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-md px-3 py-1.5 focus:ring-1 focus:ring-sky-500">
+                        <option value="all">All Labels</option>
+                        <option value="production">Production</option>
+                        <option value="testing">Testing</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="glass-panel overflow-hidden rounded-xl shadow-2xl text-sm relative border-t border-t-sky-500/30">
+                <table class="min-w-full divide-y divide-slate-800" id="fleet-table">
+                    <thead class="bg-slate-900/60">
+                        <tr>
+                            <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Node Identity</th>
+                            <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Scope</th>
+                            <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Labels</th>
+                            <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Current FW</th>
+                            <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Energy/VBatt</th>
+                            <th class="px-6 py-4 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Connection</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/50 bg-slate-900/20">
+                        {% for node in fleet_nodes|default([{'mac': 'F0:E1:D2:C3:B4:A5', 'scope': 'Personal', 'labels': ['testing', 'v1-hw'], 'fw': 'v1.4.1', 'batt': 88, 'status': 'online'}, {'mac': '11:22:33:44:55:66', 'scope': 'Team Alpha', 'labels': ['production'], 'fw': 'v1.4.2', 'batt': 14, 'status': 'offline'}]) %}
+                        <tr class="hover:bg-slate-800/40 transition-colors fleet-row" data-scope="{{ node.scope|lower }}" data-labels="{{ node.labels|join(',')|lower }}">
+                            <td class="px-6 py-4 whitespace-nowrap text-sky-300 font-mono text-sm tracking-widest">{{ node.mac }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-slate-400 text-xs uppercase">{{ node.scope }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex gap-1.5">
+                                    {% for label in node.labels %}
+                                    <span class="px-2 py-0.5 text-[9px] font-bold rounded-sm bg-slate-800 text-slate-300 border border-slate-700 uppercase">{{ label }}</span>
+                                    {% endfor %}
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-slate-200 font-mono text-xs">{{ node.fw }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap font-mono text-xs">
+                                {% set bColor = 'text-emerald-400' if node.batt > 40 else 'text-rose-400' %}
+                                <div class="flex items-center gap-2">
+                                    <div class="h-2 w-12 bg-slate-800 rounded-full overflow-hidden">
+                                        <div class="h-full {% if node.batt > 40 %}bg-emerald-500{% else %}bg-rose-500{% endif %}" style="width: {{ node.batt }}%"></div>
                                     </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+                                    <span class="{{ bColor }}">{{ node.batt }}%</span>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right">
+                                {% if node.status == 'online' %}
+                                    <span class="inline-flex items-center gap-1.5 px-2 py-1 text-[10px] uppercase font-bold text-emerald-400 bg-emerald-950/30 border border-emerald-800/50 rounded pointer-events-none">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> LIVE
+                                    </span>
+                                {% else %}
+                                    <span class="inline-flex items-center gap-1.5 px-2 py-1 text-[10px] uppercase font-bold text-slate-500 bg-slate-900 border border-slate-800 rounded pointer-events-none">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-slate-600"></span> LOST
+                                    </span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ──────────────── TAB 4: ADMIN ──────────────── -->
+        {% if user and user.role == 'Admin' %}
+        <section id="tab-admin" class="tab-content space-y-6">
+            <div class="border-b border-rose-900/50 pb-4">
+                <h2 class="text-2xl font-light text-rose-100 flex items-center gap-3">
+                    <svg class="w-6 h-6 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                    System Override
+                </h2>
+                <p class="text-sm text-rose-400/70 font-mono mt-1">Global management, teams, and API keys</p>
             </div>
 
-            <!-- ── Firmware History ── -->
-            {% if firmwares %}
-            <div class="glass-panel overflow-hidden rounded-xl shadow-2xl flex flex-col border border-slate-700">
-                <div class="p-4 border-b border-slate-700 bg-slate-800/80 backdrop-blur-sm">
-                    <h2 class="text-xs font-bold text-slate-300 uppercase tracking-widest">Firmware Manifest</h2>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Create Teams -->
+                <div class="glass-panel p-6 rounded-xl border-t border-t-rose-500/30">
+                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest mb-4 border-b border-slate-700/50 pb-2">Org Structure</h3>
+                    <form onsubmit="event.preventDefault(); alert('Create Team triggered');" class="space-y-4">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">New Team Name</label>
+                            <input type="text" placeholder="Engineering Beta" class="w-full bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-rose-500 focus:border-rose-500 text-slate-200">
+                        </div>
+                        <button type="submit" class="text-xs font-bold tracking-widest uppercase px-4 py-2 rounded bg-rose-600/80 text-white hover:bg-rose-500 transition-colors shadow-lg">Create Team</button>
+                    </form>
+
+                    <div class="mt-8">
+                        <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Assign User to Team</h4>
+                        <div class="flex gap-2">
+                            <input type="email" placeholder="user@domain.com" class="flex-1 bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-rose-500 text-slate-200">
+                            <select class="bg-slate-800 text-slate-300 text-xs rounded-md border border-slate-700 px-2 outline-none">
+                                <option>Team Alpha</option>
+                                <option>Team Bravo</option>
+                            </select>
+                            <button type="button" class="px-3 bg-slate-700 hover:bg-slate-600 text-xs font-bold uppercase rounded text-slate-200 transition-colors">Add</button>
+                        </div>
+                    </div>
                 </div>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-slate-700/50">
-                        <thead class="bg-slate-900/40">
-                            <tr>
-                                <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">ID</th>
-                                <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Class</th>
-                                <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Version</th>
-                                <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Track</th>
-                                <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Uploaded</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-700/30 text-sm bg-slate-800/20">
-                            {% for fw in firmwares %}
-                            <tr class="hover:bg-slate-700/30 transition-colors">
-                                <td class="px-5 py-3 font-mono text-slate-500 text-[11px]">#{{ fw.id }}</td>
-                                <td class="px-5 py-3 font-mono text-slate-300 text-xs">{{ fw.device_class }}</td>
-                                <td class="px-5 py-3 font-mono text-sky-400 text-[13px]">{{ fw.version }}</td>
-                                <td class="px-5 py-3">
-                                    {% if fw.track == 'prod' %}
-                                    <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">prod</span>
-                                    {% else %}
-                                    <span class="text-[10px] font-bold text-cyan-400 uppercase tracking-wider">dev</span>
-                                    {% endif %}
-                                </td>
-                                <td class="px-5 py-3 font-mono text-slate-400 text-[11px]">{{ fw.upload_timestamp.strftime('%Y-%m-%d %H:%M') if fw.upload_timestamp else '—' }} Z</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+
+                <!-- API Keys -->
+                <div class="glass-panel p-6 rounded-xl border-t border-t-fuchsia-500/30">
+                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest mb-4 border-b border-slate-700/50 pb-2">Global API Keys</h3>
+                    <p class="text-[10px] text-slate-500 font-mono mb-4">Keys generated here inherit Admin capabilities.</p>
+                    
+                    <button onclick="generateAdminKey()" type="button" class="w-full flex items-center justify-center gap-2 rounded p-2.5 text-xs font-bold tracking-widest uppercase text-white bg-fuchsia-700/80 hover:bg-fuchsia-600 shadow-[0_0_15px_rgba(192,38,211,0.3)] transition-all mb-4">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"></path></svg>
+                        Generate Root Token
+                    </button>
+
+                    <div class="space-y-2 max-h-40 overflow-y-auto pr-1">
+                        <div class="flex items-center justify-between bg-slate-800/60 border border-slate-700/60 rounded px-3 py-2">
+                            <div>
+                                <p class="text-[10px] font-mono text-slate-300">CI/CD Pipeline</p>
+                                <p class="text-[9px] font-mono text-slate-500">ID #41 · token_8f92a1...</p>
+                            </div>
+                            <button class="text-[9px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Revoke</button>
+                        </div>
+                    </div>
                 </div>
             </div>
-            {% endif %}
+        </section>
+        {% endif %}
 
-        </main>
+    </main>
+
+    <!-- ══════════════════════════ MODALS / OVERLAYS ═══════════════════════ -->
+    
+    <!-- Claim Device Modal -->
+    <div id="claim-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+        <div class="glass-panel p-6 rounded-xl shadow-[0_0_40px_rgba(0,0,0,0.8)] max-w-md w-full border border-sky-500/30 transform scale-95 opacity-0 transition-all duration-200" id="claim-modal-content">
+            <div class="flex justify-between items-center mb-5">
+                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-widest flex items-center gap-2">
+                    <svg class="w-5 h-5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    Claim Target Node
+                </h3>
+                <button onclick="closeClaimModal()" type="button" class="text-slate-500 border border-slate-700 rounded hover:text-white hover:bg-rose-500 hover:border-rose-500 transition-colors p-1" title="Close">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            
+            <form action="/api/claim" method="POST" id="claim-form" class="space-y-5">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Target MAC</label>
+                    <input type="text" id="claim-mac" name="mac" readonly class="w-full bg-slate-900/80 border border-slate-700 rounded py-2 px-3 text-sm font-mono text-sky-400 outline-none cursor-not-allowed">
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Assignment Scope</label>
+                    <select name="scope" class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-sky-500 outline-none">
+                        <option value="personal">Personal (Isolated)</option>
+                        <option value="team-alpha">Team Alpha</option>
+                        <option value="team-engineering">Engineering</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Initial Labels (Comma separated)</label>
+                    <input type="text" name="labels" placeholder="testing, office-hvac" class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-sky-500 outline-none placeholder-slate-500">
+                </div>
+                
+                <div class="pt-2 flex gap-3">
+                    <button type="button" onclick="closeClaimModal()" class="flex-1 py-2.5 text-xs font-bold uppercase rounded border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors">Cancel</button>
+                    <button type="submit" class="flex-1 py-2.5 text-xs font-bold uppercase rounded bg-sky-600 text-white hover:bg-sky-500 shadow-[0_0_15px_rgba(14,165,233,0.4)] transition-all">Confirm Claim</button>
+                </div>
+            </form>
+        </div>
     </div>
 
-    <script>
-        // ── Device approval ──────────────────────────────────────────────────
-        async function approveDevice(mac) {
-            if (!confirm(`Approve device ${mac}?\n\nIt will be assigned to the Production track by default.`)) return;
-            try {
-                const res = await fetch(`/admin/devices/${encodeURIComponent(mac)}/approve`, {
-                    method: 'POST',
-                    credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ track: 'prod' }),
-                });
-                if (res.ok) { window.location.reload(); }
-                else {
-                    const data = await res.json().catch(() => ({}));
-                    alert('Approval failed: ' + (data.detail || res.statusText));
-                }
-            } catch (err) { alert('Network error: ' + err.message); }
-        }
 
-        // ── Copy new API key to clipboard ────────────────────────────────────
-        function copyNewKey() {
-            const val = document.getElementById('new-key-value')?.textContent?.trim();
-            if (!val) return;
-            navigator.clipboard.writeText(val).then(() => {
-                alert('API key copied to clipboard.');
-            }).catch(() => {
-                prompt('Copy this key:', val);
+    <!-- ══════════════════════════ SCRIPTS ═══════════════════════════ -->
+    <script>
+        // ── Clock ──────────────────────────────────────────
+        function updateTime() {
+            const el = document.getElementById('clock');
+            if (el) el.textContent = new Date().toISOString().replace('T', ' ').substring(0, 19) + ' Z';
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+
+        // ── Tab Switching ──────────────────────────────────
+        function initTabs() {
+            const tabBtns = document.querySelectorAll('.tab-btn');
+            const tabContents = document.querySelectorAll('.tab-content');
+
+            tabBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const targetId = btn.dataset.target;
+                    
+                    // Reset all buttons
+                    tabBtns.forEach(b => {
+                        const bTarget = b.dataset.target;
+                        const isBAdmin = bTarget === 'tab-admin';
+                        const isDesktop = b.parentElement.id === 'desktop-tabs';
+                        
+                        if (isBAdmin) {
+                            if (isDesktop) b.className = "tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-rose-400 hover:text-rose-200 hover:bg-slate-700/30";
+                            else b.className = "tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-rose-400 bg-slate-800/50";
+                        } else {
+                            if (isDesktop) b.className = "tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-700/30";
+                            else b.className = "tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-slate-400 bg-slate-800/50";
+                        }
+                    });
+                    
+                    // Activate clicked buttons (both mobile and desktop)
+                    const activeBtns = document.querySelectorAll(.tab-btn[data-target=""]);
+                    activeBtns.forEach(ab => {
+                        const isAbAdmin = targetId === 'tab-admin';
+                        const isAbDesktop = ab.parentElement.id === 'desktop-tabs';
+                        const activeColor = isAbAdmin ? 'text-rose-400 bg-slate-700/50 shadow border-rose-900/50' : 'text-sky-400 bg-slate-700/50 shadow';
+                        
+                        if (isAbDesktop) ab.className = 	ab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all ;
+                        else ab.className = 	ab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all ;
+                    });
+
+                    // Show content
+                    tabContents.forEach(content => {
+                        content.classList.remove('active');
+                        if (content.id === targetId) content.classList.add('active');
+                    });
+                });
+            });
+        }
+        initTabs();
+
+        // ── Table Filtering Logic ──────────────────────────
+        function filterTable(tableRowsSelector, scopeFilterId, labelFilterId) {
+            const scopeEl = document.getElementById(scopeFilterId);
+            const labelEl = document.getElementById(labelFilterId);
+            if (!scopeEl || !labelEl) return;
+            
+            const scopeVal = scopeEl.value.toLowerCase();
+            const labelVal = labelEl.value.toLowerCase();
+            const rows = document.querySelectorAll(tableRowsSelector);
+
+            rows.forEach(row => {
+                const rowScope = (row.dataset.scope || "").toLowerCase();
+                const rowLabels = (row.dataset.labels || "").toLowerCase().split(',');
+
+                const matchScope = (scopeVal === 'all') || rowScope.includes(scopeVal);
+                const matchLabel = (labelVal === 'all') || rowLabels.some(l => l.trim() === labelVal);
+
+                if (matchScope && matchLabel) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
             });
         }
 
-        // ── Live UTC clock ───────────────────────────────────────────────────
-        function updateTime() {
-            const el = document.getElementById('clock');
-            if (el) el.textContent = new Date().toISOString().replace('T', ' ').substring(0, 19) + ' ZULU';
-        }
-        setInterval(updateTime, 1000);
-        updateTime();
-    </script>
-</body>
-</html>
-        <div class="max-w-7xl mx-auto flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-                <svg class="w-8 h-8 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                <h1 class="text-2xl font-bold tracking-widest text-slate-100 header-glow uppercase">OTA // COMMAND</h1>
-            </div>
-            <div class="text-slate-400 font-mono text-sm tracking-wide">
-                SYS.TIME: <span id="clock"></span>
-            </div>
-        </div>
-    </nav>
+        // Deploy Table Filters
+        document.getElementById('deploy-scope-filter')?.addEventListener('change', () => filterTable('.fw-row', 'deploy-scope-filter', 'deploy-label-filter'));
+        document.getElementById('deploy-label-filter')?.addEventListener('change', () => filterTable('.fw-row', 'deploy-scope-filter', 'deploy-label-filter'));
 
-    <!-- Main Content -->
-    <div class="flex-grow max-w-7xl mx-auto w-full p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-4 gap-6 items-start mt-6">
-        
-        <!-- Left Sidebar: Upload form -->
-        <aside class="lg:col-span-1 space-y-6 lg:sticky lg:top-6">
-            <div class="glass-panel p-5 rounded-xl shadow-2xl relative overflow-hidden">
-                <!-- Decorative top gradient line -->
-                <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-sky-600 via-sky-400 to-emerald-400"></div>
+        // Fleet Table Filters
+        document.getElementById('fleet-scope-filter')?.addEventListener('change', () => filterTable('.fleet-row', 'fleet-scope-filter', 'fleet-label-filter'));
+        document.getElementById('fleet-label-filter')?.addEventListener('change', () => filterTable('.fleet-row', 'fleet-scope-filter', 'fleet-label-filter'));
 
-                <h2 class="text-xs font-bold text-slate-300 uppercase tracking-widest mb-5 border-b border-slate-700/50 pb-2">Deploy Payload</h2>
-                
-                <form action="/admin/upload" method="POST" enctype="multipart/form-data" class="space-y-4">
-                    <div>
-                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Target Class</label>
-                        <input type="text" name="device_class" placeholder="sensor_node_v1" required 
-                               class="block w-full bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-sky-500 focus:border-sky-500 text-slate-200 transition-colors">
-                    </div>
-                    <div>
-                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Version Tuple</label>
-                        <input type="text" name="version" placeholder="1.0.3" required 
-                               class="block w-full bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm font-mono focus:ring-1 focus:ring-sky-500 focus:border-sky-500 text-slate-200 transition-colors">
-                    </div>
-                    <div>
-                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Release Track</label>
-                        <select name="track" class="block w-full bg-slate-800/80 border border-slate-700 rounded-md py-2 pl-3 pr-8 text-sm focus:ring-1 focus:ring-sky-500 focus:border-sky-500 appearance-none text-slate-200">
-                            <option value="prod">Production</option>
-                            <option value="dev">Development</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Binary File (.bin)</label>
-                        <div class="relative items-center justify-center w-full">
-                            <label class="flex flex-col border border-dashed border-slate-600 rounded-lg w-full h-20 group text-center cursor-pointer bg-slate-800/30 hover:bg-slate-800/80 hover:border-sky-500 transition-all">
-                                <div class="h-full w-full flex flex-col items-center justify-center p-2" id="drop-zone-content">
-                                    <svg class="h-5 w-5 text-slate-500 mb-1 group-hover:text-sky-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-                                    <p class="text-[10px] text-slate-400 font-mono tracking-wide pointer-events-none"><span class="text-sky-500 font-semibold group-hover:text-sky-400">SELECT .BIN</span> or drag</p>
-                                </div>
-                                <input type="file" name="file" accept=".bin" required class="hidden" 
-                                       onchange="document.getElementById('drop-zone-content').innerHTML = '<p class=\'text-sky-400 text-xs font-mono font-bold pt-6 px-2 truncate block w-full\' title=\'' + this.files[0].name + '\'>' + this.files[0].name + '</p>'" />
-                            </label>
-                        </div>
-                    </div>
-                    <div class="pt-2">
-                        <button type="submit" class="w-full flex items-center justify-center rounded-md p-2.5 text-xs font-bold tracking-widest uppercase text-white bg-sky-600/90 hover:bg-sky-500 shadow-[0_0_15px_rgba(2,132,199,0.4)] focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2 focus:ring-offset-slate-900 transition-all">
-                            Execute Push
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </aside>
 
-        <!-- Right Main View: Fleet Panels -->
-        <main class="lg:col-span-3 space-y-6">
-            {% set pending_devices = devices | selectattr('status', 'equalto', 'pending') | list %}
-            {% set active_devices = devices | selectattr('status', 'equalto', 'approved') | list %}
+        // ── Claim Modal Logic ──────────────────────────────
+        const claimModal = document.getElementById('claim-modal');
+        const claimModalContent = document.getElementById('claim-modal-content');
+        const claimMacInput = document.getElementById('claim-mac');
 
-            <!-- Pending Approval Queue -->
-            <div class="relative glass-panel overflow-hidden rounded-xl shadow-2xl flex flex-col border border-amber-800/40">
-                <div class="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-amber-600 via-amber-400 to-yellow-400"></div>
-                <div class="p-4 border-b border-amber-900/40 flex justify-between items-center bg-slate-800/80 backdrop-blur-sm">
-                    <h2 class="text-xs font-bold text-amber-400 uppercase tracking-widest flex items-center gap-2">
-                        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
-                        Pending Approval Queue
-                    </h2>
-                    <span class="text-[10px] font-mono tracking-wider font-bold text-amber-400 border border-amber-800/40 bg-amber-950/30 px-2 py-0.5 rounded">
-                        {{ pending_devices|length }} AWAITING
-                    </span>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-amber-900/30">
-                        <thead class="bg-slate-900/40">
-                            <tr>
-                                <th scope="col" class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">MAC Address</th>
-                                <th scope="col" class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Class</th>
-                                <th scope="col" class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">First Seen</th>
-                                <th scope="col" class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                                <th scope="col" class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-amber-900/20 text-sm bg-slate-800/20">
-                            {% for device in pending_devices %}
-                            <tr class="hover:bg-amber-950/20 transition-colors">
-                                <td class="px-5 py-3.5 whitespace-nowrap text-amber-400 font-mono text-[13px] tracking-tight">{{ device.mac_address }}</td>
-                                <td class="px-5 py-3.5 whitespace-nowrap text-slate-300 text-xs font-mono">{{ device.device_class }}</td>
-                                <td class="px-5 py-3.5 whitespace-nowrap text-slate-400 font-mono text-[11px]">{{ device.last_checkin.strftime('%Y-%m-%d %H:%M:%S') if device.last_checkin else 'NO_DATA' }} Z</td>
-                                <td class="px-5 py-3.5 whitespace-nowrap">
-                                    <span class="px-2 py-0.5 inline-flex text-[10px] leading-4 font-bold rounded bg-amber-950/60 text-amber-400 border border-amber-700/60 uppercase tracking-wider shadow-[0_0_10px_rgba(251,191,36,0.2)]">PENDING</span>
-                                </td>
-                                <td class="px-5 py-3.5 whitespace-nowrap">
-                                    <button onclick="approveDevice('{{ device.mac_address }}')"
-                                            class="px-3 py-1.5 text-[10px] font-bold tracking-wider uppercase rounded bg-emerald-700/80 text-emerald-100 border border-emerald-600/50 hover:bg-emerald-600 hover:shadow-[0_0_12px_rgba(52,211,153,0.4)] active:scale-95 transition-all focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:ring-offset-1 focus:ring-offset-slate-900">
-                                        Approve
-                                    </button>
-                                </td>
-                            </tr>
-                            {% else %}
-                            <tr>
-                                <td colspan="5" class="px-5 py-8 text-center">
-                                    <p class="font-mono text-xs tracking-widest text-slate-600">NO DEVICES PENDING APPROVAL</p>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Active Fleet Grid -->
-            <div class="glass-panel overflow-hidden rounded-xl shadow-2xl flex flex-col border border-slate-700">
-                <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800/80 backdrop-blur-sm">
-                    <h2 class="text-xs font-bold text-slate-300 uppercase tracking-widest">Active Fleet Grid</h2>
-                    <div class="flex items-center space-x-2">
-                        <span class="flex h-2.5 w-2.5 relative justify-center items-center">
-                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                            <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-                        </span>
-                        <span class="text-[10px] font-mono tracking-wider font-bold text-emerald-400 border border-emerald-800/40 bg-emerald-950/30 px-2 py-0.5 rounded">
-                            {{ active_devices|length }} NODES ACTIVE
-                        </span>
-                    </div>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-slate-700/50">
-                        <thead class="bg-slate-900/40">
-                            <tr>
-                                <th scope="col" class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">MAC Address</th>
-                                <th scope="col" class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Class</th>
-                                <th scope="col" class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Track</th>
-                                <th scope="col" class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Version</th>
-                                <th scope="col" class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Last Ping</th>
-                                <th scope="col" class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-700/30 text-sm bg-slate-800/20">
-                            {% for device in active_devices %}
-                            <tr class="hover:bg-slate-700/40 transition-colors group">
-                                <td class="px-5 py-3.5 whitespace-nowrap text-sky-400 font-mono text-[13px] tracking-tight group-hover:text-sky-300">{{ device.mac_address }}</td>
-                                <td class="px-5 py-3.5 whitespace-nowrap text-slate-300 text-xs font-mono">{{ device.device_class }}</td>
-                                <td class="px-5 py-3.5 whitespace-nowrap">
-                                    {% if device.track == 'prod' %}
-                                    <span class="px-2 py-0.5 inline-flex text-[10px] leading-4 font-bold rounded bg-emerald-950/50 text-emerald-400 border border-emerald-800/50 uppercase tracking-wider shadow-[0_0_10px_rgba(52,211,153,0.15)]">PROD</span>
-                                    {% else %}
-                                    <span class="px-2 py-0.5 inline-flex text-[10px] leading-4 font-bold rounded bg-cyan-950/50 text-cyan-400 border border-cyan-800/50 uppercase tracking-wider shadow-[0_0_10px_rgba(34,211,238,0.15)]">DEV</span>
-                                    {% endif %}
-                                </td>
-                                <td class="px-5 py-3.5 whitespace-nowrap text-slate-200 font-mono text-[13px]">{{ device.current_version }}</td>
-                                <td class="px-5 py-3.5 whitespace-nowrap text-slate-400 font-mono text-[11px]">{{ device.last_checkin.strftime('%Y-%m-%d %H:%M:%S') if device.last_checkin else 'NO_DATA' }} Z</td>
-                                <td class="px-5 py-3.5 whitespace-nowrap">
-                                    <span class="px-2 py-0.5 inline-flex text-[10px] leading-4 font-bold rounded bg-emerald-950/50 text-emerald-400 border border-emerald-800/50 uppercase tracking-wider shadow-[0_0_10px_rgba(52,211,153,0.15)]">APPROVED</span>
-                                    {% if device.last_ota_status and device.last_ota_status != 'OK' %}
-                                    <span class="ml-1 text-rose-400 font-mono text-[10px] uppercase font-bold tracking-widest bg-rose-950/50 px-1 py-0.5 rounded border border-rose-800">{{ device.last_ota_status }}</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% else %}
-                            <tr>
-                                <td colspan="6" class="px-5 py-12 text-center">
-                                    <div class="flex flex-col items-center justify-center text-slate-500">
-                                        <svg class="h-8 w-8 mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                                        <p class="font-mono text-sm tracking-widest">NO ACTIVE NODES IN FLEET</p>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </main>
-    </div>
-
-    <script>
-        async function approveDevice(mac) {
-            if (!confirm(`Approve device ${mac}?\n\nIt will be assigned to the Production track by default.`)) return;
-            try {
-                const response = await fetch(`/admin/devices/${encodeURIComponent(mac)}/approve`, {
-                    method: 'POST',
-                    credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ track: 'prod' })
-                });
-                if (response.ok) {
-                    window.location.reload();
-                } else {
-                    const data = await response.json().catch(() => ({}));
-                    alert('Approval failed: ' + (data.detail || response.statusText));
-                }
-            } catch (err) {
-                alert('Network error: ' + err.message);
+        function openClaimModal(mac) {
+            if (claimMacInput) claimMacInput.value = mac;
+            if (claimModal) {
+                claimModal.classList.remove('hidden');
+                claimModal.classList.add('flex');
             }
+            setTimeout(() => {
+                if(claimModalContent) {
+                    claimModalContent.classList.remove('scale-95', 'opacity-0');
+                    claimModalContent.classList.add('scale-100', 'opacity-100');
+                }
+            }, 10);
         }
 
-        function updateTime() {
-            document.getElementById('clock').textContent = new Date().toISOString().replace('T', ' ').substring(0, 19) + ' ZULU';
+        function closeClaimModal() {
+            if(claimModalContent) {
+                claimModalContent.classList.remove('scale-100', 'opacity-100');
+                claimModalContent.classList.add('scale-95', 'opacity-0');
+            }
+            setTimeout(() => {
+                if(claimModal) {
+                    claimModal.classList.add('hidden');
+                    claimModal.classList.remove('flex');
+                }
+            }, 200);
         }
-        setInterval(updateTime, 1000);
-        updateTime();
+
+        // Handle Escape Key for Modal
+        document.addEventListener('keydown', (e) => {
+            if(e.key === 'Escape' && claimModal && !claimModal.classList.contains('hidden')) {
+                closeClaimModal();
+            }
+        });
+
+        // Background click close
+        claimModal?.addEventListener('click', (e) => {
+            if(e.target === claimModal) {
+                closeClaimModal();
+            }
+        });
+
+        function generateAdminKey() {
+            alert('Generating new root token via API...');
+        }
+        
+        function refreshData(e) {
+            const btn = e.currentTarget;
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<svg class="animate-spin h-4 w-4 text-sky-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Scanning...';
+            
+            setTimeout(() => {
+                btn.innerHTML = originalHtml;
+                // Add reload logic here if needed
+            }, 1000);
+        }
     </script>
 </body>
 </html>

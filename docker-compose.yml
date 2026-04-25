@@ -7,6 +7,8 @@ services:
       # ── Google OAuth ── obtain from https://console.cloud.google.com/apis/credentials
       - GOOGLE_CLIENT_ID=YOUR_GOOGLE_CLIENT_ID
       - GOOGLE_CLIENT_SECRET=YOUR_GOOGLE_CLIENT_SECRET
+      # ── OAuth callback ── must exactly match an Authorized Redirect URI in Google Cloud Console
+      - GOOGLE_OAUTH_REDIRECT_URI=https://YOUR_DOMAIN/auth
       # ── Admin whitelist ── comma-separated list of permitted Google emails
       - ADMIN_EMAILS=you@gmail.com
       # ── Session signing key ── generate once with: python -c "import secrets; print(secrets.token_urlsafe(32))"
