@@ -103,9 +103,9 @@ class Device(Base):
     scope_type = Column(Enum(ScopeType), nullable=True, index=True)
 
     # Cascading OTA Resolution
-    device_profile_id = Column(Integer, ForeignKey("device_profiles.id"), nullable=True, index=True)
-    application_group_id = Column(Integer, ForeignKey("application_groups.id"), nullable=True, index=True)
-    firmware_override_id = Column(Integer, ForeignKey("firmware_releases.id"), nullable=True, index=True)
+    device_profile_id = Column(Integer, ForeignKey("device_profiles.id", ondelete="SET NULL"), nullable=True, index=True)
+    application_group_id = Column(Integer, ForeignKey("application_groups.id", ondelete="SET NULL"), nullable=True, index=True)
+    firmware_override_id = Column(Integer, ForeignKey("firmware_releases.id", ondelete="SET NULL"), nullable=True, index=True)
 
     labels = relationship("Label", secondary=device_label_association, back_populates="devices")
     device_profile = relationship("DeviceProfile", back_populates="devices", foreign_keys=[device_profile_id])
@@ -178,7 +178,7 @@ class ApplicationGroup(Base):
     name = Column(String, nullable=False, index=True)               # e.g. "Outdoor Sensors"
     team_id = Column(Integer, ForeignKey("teams.id", ondelete="CASCADE"), nullable=False, index=True)
     # Nullable: a group may exist before any firmware is designated.
-    target_release_id = Column(Integer, ForeignKey("firmware_releases.id"), nullable=True, index=True)
+    target_release_id = Column(Integer, ForeignKey("firmware_releases.id", ondelete="SET NULL"), nullable=True, index=True)
 
     team = relationship("Team", back_populates="application_groups")
     target_release = relationship("FirmwareRelease", back_populates="application_groups", foreign_keys=[target_release_id])

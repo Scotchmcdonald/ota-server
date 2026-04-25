@@ -169,7 +169,7 @@ async def root():
 # =============================================================================
 
 @app.get("/dashboard", response_class=HTMLResponse)
-async def dashboard(request: Request, db: Session = Depends(get_db)):
+def dashboard(request: Request, db: Session = Depends(get_db)):
     """Main Flight Deck dashboard. Requires authentication."""
     session_user = request.session.get("user")
     if not session_user:
@@ -216,7 +216,7 @@ async def admin_redirect():
 # =============================================================================
 
 @app.post("/admin/generate-key")
-async def generate_key(
+def generate_key(
     request: Request,
     db:      Session = Depends(get_db),
 ):
@@ -242,7 +242,7 @@ async def generate_key(
 
 
 @app.post("/admin/delete-key/{key_id}")
-async def delete_key(
+def delete_key(
     key_id:  int,
     request: Request,
     db:      Session = Depends(get_db),
@@ -267,7 +267,7 @@ async def delete_key(
 # =============================================================================
 
 @app.post("/admin/upload-firmware", status_code=201)
-async def upload_firmware_m2m(
+def upload_firmware_m2m(
     file:              UploadFile,
     version:           str = Form(...),
     device_profile_id: int = Form(...),
@@ -301,7 +301,7 @@ async def upload_firmware_m2m(
     if not os.path.realpath(file_path).startswith(os.path.realpath(FIRMWARE_DIR)):
         raise HTTPException(status_code=400, detail="Invalid path construction.")
 
-    content = await file.read()
+    content = file.file.read()
     with open(file_path, "wb") as buf:
         buf.write(content)
 
@@ -329,7 +329,7 @@ async def upload_firmware_m2m(
 # =============================================================================
 
 @app.post("/admin/upload", status_code=201)
-async def upload_firmware_web(
+def upload_firmware_web(
     request:           Request,
     file:              UploadFile,
     version:           str = Form(...),
@@ -365,7 +365,7 @@ async def upload_firmware_web(
     if not os.path.realpath(file_path).startswith(os.path.realpath(FIRMWARE_DIR)):
         raise HTTPException(status_code=400, detail="Invalid path construction.")
 
-    content = await file.read()
+    content = file.file.read()
     with open(file_path, "wb") as buf:
         buf.write(content)
 
@@ -461,6 +461,11 @@ def check_update(
     if resolved_release is None:
         return Response(status_code=204)
 
+    # CRITICAL: Prevent Cross-Profile Bricking
+    if device.device_profile_id and resolved_release.device_profile_id != device.device_profile_id:
+        print(f"WARNING: Profile mismatch! Device {device.mac_address} blocked from bad OTA.")
+        return Response(status_code=204)
+
     if not is_newer_version(resolved_release.version, x_firmware_version):
         return Response(status_code=204)
 
@@ -485,11 +490,12 @@ class ClaimDevicePayload(BaseModel):
 
 @app.post("/devices/{mac_address}/claim")
 def claim_device(
+    request: Request,
     mac_address: str,
     payload: ClaimDevicePayload,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user_from_db)
+    db: Session = Depends(get_db)
 ):
+    user = get_current_user_from_db(request, db)
     allowed_scopes = get_current_user_scopes(user=user)
     
     if user.role.value != "Admin" and (payload.scope_type, payload.target_id) not in allowed_scopes:
