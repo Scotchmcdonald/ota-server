@@ -258,7 +258,7 @@ async def login(request: Request):
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
 
-@app.get("/auth/callback", name="auth_callback", include_in_schema=False)
+@app.get("/auth", name="auth_callback", include_in_schema=False)
 async def auth_callback(request: Request, db: Session = Depends(get_db)):
     """
     Google OAuth callback handler.
