@@ -12,7 +12,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 from pydantic import BaseModel
 
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, event
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, event, text
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
 
 # ---------------------------------------------------------
@@ -75,6 +75,7 @@ class Device(Base):
     status = Column(String, default="pending") # 'pending' or 'approved'
     last_checkin = Column(DateTime, default=datetime.utcnow)
     last_ota_status = Column(String)
+    battery_level = Column(String, nullable=True)
 
 class Firmware(Base):
     __tablename__ = "firmware"
@@ -86,6 +87,22 @@ class Firmware(Base):
     upload_timestamp = Column(DateTime, default=datetime.utcnow)
 
 Base.metadata.create_all(bind=engine)
+
+# Idempotent column migrations — each ALTER TABLE is silently skipped if the
+# column already exists (SQLite raises OperationalError in that case).
+_DEVICE_MIGRATIONS = [
+    "ALTER TABLE devices ADD COLUMN track VARCHAR DEFAULT 'prod'",
+    "ALTER TABLE devices ADD COLUMN status VARCHAR DEFAULT 'pending'",
+    "ALTER TABLE devices ADD COLUMN last_ota_status VARCHAR",
+    "ALTER TABLE devices ADD COLUMN battery_level VARCHAR",
+]
+with engine.connect() as _conn:
+    for _stmt in _DEVICE_MIGRATIONS:
+        try:
+            _conn.execute(text(_stmt))
+            _conn.commit()
+        except Exception:
+            pass  # Column already exists
 
 # Dependency
 def get_db():
@@ -113,10 +130,11 @@ def is_newer_version(v1: str, v2: str) -> bool:
 
 @app.post("/check-update")
 def check_update(
-    x_device_mac: Optional[str] = Header(None),
-    x_device_secret: Optional[str] = Header(None),
-    x_device_class: Optional[str] = Header(None),
-    x_firmware_version: Optional[str] = Header(None),
+    x_device_mac: Optional[str] = Header(default=None),
+    x_device_secret: Optional[str] = Header(default=None),
+    x_device_class: Optional[str] = Header(default=None),
+    x_firmware_version: Optional[str] = Header(default=None),
+    x_device_battery: Optional[str] = Header(default=None),
     db: Session = Depends(get_db)
 ):
     """
@@ -145,7 +163,8 @@ def check_update(
             current_version=x_firmware_version,
             track="prod",
             status="pending",
-            last_checkin=datetime.utcnow()
+            last_checkin=datetime.utcnow(),
+            battery_level=x_device_battery
         )
         db.add(device)
         db.commit()
@@ -160,6 +179,8 @@ def check_update(
         device.last_checkin = datetime.utcnow()
         device.current_version = x_firmware_version
         device.device_class = x_device_class
+        if x_device_battery is not None:
+            device.battery_level = x_device_battery
         db.commit()
         
         if device.status == "pending":
