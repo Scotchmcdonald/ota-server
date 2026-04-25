@@ -166,6 +166,33 @@ class FirmwareRelease(Base):
     application_groups = relationship("ApplicationGroup", back_populates="target_release")
 
 
+class AllowedEmail(Base):
+    """
+    An explicitly permitted Google account email address.
+    Checked at OAuth callback time. Managed at runtime by Admins.
+    """
+    __tablename__ = "allowed_emails"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, nullable=False, index=True)   # Stored lowercase.
+    note = Column(String, nullable=True)                               # Optional label, e.g. "Scott - BorealTek"
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class AllowedDomain(Base):
+    """
+    A wildcard domain rule, e.g. 'borealtek.ca'.
+    Any Google account whose email ends in @<domain> is permitted.
+    Managed at runtime by Admins.
+    """
+    __tablename__ = "allowed_domains"
+
+    id = Column(Integer, primary_key=True, index=True)
+    domain = Column(String, unique=True, nullable=False, index=True)  # Stored lowercase, no leading @.
+    note = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class ApplicationGroup(Base):
     """
     A logical fleet segment owned by a team.

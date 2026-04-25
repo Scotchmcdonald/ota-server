@@ -44,6 +44,7 @@
                     <button class="tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-700/30" data-target="tab-fleet">Fleet</button>
                     {% if user and user.role == 'Admin' %}
                     <button class="tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-rose-400 hover:text-rose-200 hover:bg-slate-700/30" data-target="tab-admin">Admin</button>
+                    <button class="tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-amber-400 hover:text-amber-200 hover:bg-slate-700/30" data-target="tab-access">Access</button>
                     {% endif %}
                 </div>
 
@@ -69,6 +70,7 @@
             <button class="tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-slate-400 bg-slate-800/50" data-target="tab-fleet">Fleet</button>
             {% if user and user.role == 'Admin' %}
             <button class="tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-rose-400 bg-slate-800/50" data-target="tab-admin">Admin</button>
+            <button class="tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-amber-400 bg-slate-800/50" data-target="tab-access">Access</button>
             {% endif %}
         </div>
     </nav>
@@ -309,6 +311,81 @@
                 </div>
             </div>
         </section>
+
+        <!-- ──────────────── TAB 5: ACCESS ──────────────── -->
+        {% if user and user.role == 'Admin' %}
+        <section id="tab-access" class="tab-content space-y-6">
+            <div class="border-b border-amber-900/50 pb-4">
+                <h2 class="text-2xl font-light text-amber-100 flex items-center gap-3">
+                    <svg class="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                    Access Control
+                </h2>
+                <p class="text-sm text-amber-400/70 font-mono mt-1">Manage who can log in via Google OAuth</p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                <!-- Allowed Emails -->
+                <div class="glass-panel p-6 rounded-xl border-t border-t-amber-500/30 space-y-4">
+                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest border-b border-slate-700/50 pb-2">Permitted Email Addresses</h3>
+
+                    <form action="/admin/access/emails/add" method="POST" class="flex gap-2 flex-wrap">
+                        <input type="email" name="email" placeholder="operator@company.com" required
+                            class="flex-1 min-w-0 bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-slate-200 placeholder-slate-500 outline-none">
+                        <input type="text" name="note" placeholder="Note (optional)"
+                            class="w-40 bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-amber-500 text-slate-200 placeholder-slate-500 outline-none">
+                        <button type="submit" class="px-4 py-2 text-xs font-bold tracking-widest uppercase rounded bg-amber-600/80 text-white hover:bg-amber-500 transition-colors shadow">Add</button>
+                    </form>
+
+                    <div class="space-y-2 max-h-72 overflow-y-auto pr-1">
+                        {% for entry in allowed_emails %}
+                        <div class="flex items-center justify-between bg-slate-800/60 border border-slate-700/60 rounded px-3 py-2 gap-2">
+                            <div class="min-w-0">
+                                <p class="text-xs font-mono text-amber-300 truncate">{{ entry.email }}</p>
+                                {% if entry.note %}<p class="text-[10px] text-slate-500 truncate">{{ entry.note }}</p>{% endif %}
+                            </div>
+                            <form action="/admin/access/emails/delete/{{ entry.id }}" method="POST" class="shrink-0">
+                                <button type="submit" class="text-[9px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Remove</button>
+                            </form>
+                        </div>
+                        {% else %}
+                        <p class="text-xs text-slate-600 font-mono py-4 text-center">No individual emails configured.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Allowed Domains -->
+                <div class="glass-panel p-6 rounded-xl border-t border-t-sky-500/30 space-y-4">
+                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest border-b border-slate-700/50 pb-2">Permitted Domains (Wildcard)</h3>
+                    <p class="text-[10px] text-slate-500 font-mono">Any <span class="text-sky-400">@domain</span> match grants access. Use carefully.</p>
+
+                    <form action="/admin/access/domains/add" method="POST" class="flex gap-2 flex-wrap">
+                        <input type="text" name="domain" placeholder="borealtek.ca" required
+                            class="flex-1 min-w-0 bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-sky-500 focus:border-sky-500 text-slate-200 placeholder-slate-500 outline-none">
+                        <input type="text" name="note" placeholder="Note (optional)"
+                            class="w-40 bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-sky-500 text-slate-200 placeholder-slate-500 outline-none">
+                        <button type="submit" class="px-4 py-2 text-xs font-bold tracking-widest uppercase rounded bg-sky-600/80 text-white hover:bg-sky-500 transition-colors shadow">Add</button>
+                    </form>
+
+                    <div class="space-y-2 max-h-72 overflow-y-auto pr-1">
+                        {% for entry in allowed_domains %}
+                        <div class="flex items-center justify-between bg-slate-800/60 border border-slate-700/60 rounded px-3 py-2 gap-2">
+                            <div class="min-w-0">
+                                <p class="text-xs font-mono text-sky-300 truncate">@{{ entry.domain }}</p>
+                                {% if entry.note %}<p class="text-[10px] text-slate-500 truncate">{{ entry.note }}</p>{% endif %}
+                            </div>
+                            <form action="/admin/access/domains/delete/{{ entry.id }}" method="POST" class="shrink-0">
+                                <button type="submit" class="text-[9px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Remove</button>
+                            </form>
+                        </div>
+                        {% else %}
+                        <p class="text-xs text-slate-600 font-mono py-4 text-center">No domain wildcards configured.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+
+            </div>
+        </section>
         {% endif %}
 
     </main>
@@ -368,6 +445,12 @@
         updateTime();
 
         // ── Tab Switching ──────────────────────────────────
+        function getTabColor(tabTarget, isActive) {
+            if (tabTarget === 'tab-admin')  return isActive ? 'text-rose-400'  : 'text-rose-400 hover:text-rose-200';
+            if (tabTarget === 'tab-access') return isActive ? 'text-amber-400' : 'text-amber-400 hover:text-amber-200';
+            return isActive ? 'text-sky-400' : 'text-slate-400 hover:text-slate-200';
+        }
+
         function initTabs() {
             const tabBtns = document.querySelectorAll('.tab-btn');
             const tabContents = document.querySelectorAll('.tab-content');
@@ -375,34 +458,26 @@
             tabBtns.forEach(btn => {
                 btn.addEventListener('click', () => {
                     const targetId = btn.dataset.target;
-                    
-                    // Reset all buttons
+
+                    // Reset all buttons to idle state
                     tabBtns.forEach(b => {
-                        const bTarget = b.dataset.target;
-                        const isBAdmin = bTarget === 'tab-admin';
                         const isDesktop = b.parentElement.id === 'desktop-tabs';
-                        
-                        if (isBAdmin) {
-                            if (isDesktop) b.className = "tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-rose-400 hover:text-rose-200 hover:bg-slate-700/30";
-                            else b.className = "tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-rose-400 bg-slate-800/50";
-                        } else {
-                            if (isDesktop) b.className = "tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-700/30";
-                            else b.className = "tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-slate-400 bg-slate-800/50";
-                        }
-                    });
-                    
-                    // Activate clicked buttons (both mobile and desktop)
-                    const activeBtns = document.querySelectorAll(.tab-btn[data-target=""]);
-                    activeBtns.forEach(ab => {
-                        const isAbAdmin = targetId === 'tab-admin';
-                        const isAbDesktop = ab.parentElement.id === 'desktop-tabs';
-                        const activeColor = isAbAdmin ? 'text-rose-400 bg-slate-700/50 shadow border-rose-900/50' : 'text-sky-400 bg-slate-700/50 shadow';
-                        
-                        if (isAbDesktop) ab.className = 	ab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all ;
-                        else ab.className = 	ab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all ;
+                        const color = getTabColor(b.dataset.target, false);
+                        b.className = isDesktop
+                            ? `tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all ${color} hover:bg-slate-700/30`
+                            : `tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all ${color} bg-slate-800/50`;
                     });
 
-                    // Show content
+                    // Activate the clicked tab buttons (desktop + mobile mirror)
+                    document.querySelectorAll(`.tab-btn[data-target="${targetId}"]`).forEach(ab => {
+                        const isDesktop = ab.parentElement.id === 'desktop-tabs';
+                        const color = getTabColor(targetId, true);
+                        ab.className = isDesktop
+                            ? `tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all ${color} bg-slate-700/50 shadow`
+                            : `tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all ${color} bg-slate-700/50 shadow`;
+                    });
+
+                    // Show the target content panel
                     tabContents.forEach(content => {
                         content.classList.remove('active');
                         if (content.id === targetId) content.classList.add('active');
@@ -411,6 +486,14 @@
             });
         }
         initTabs();
+
+        // ── Auto-select tab from query param (e.g. ?tab=access after redirect) ──
+        const urlParams = new URLSearchParams(window.location.search);
+        const tabParam = urlParams.get('tab');
+        if (tabParam) {
+            const targetBtn = document.querySelector(`.tab-btn[data-target="tab-${tabParam}"]`);
+            if (targetBtn) targetBtn.click();
+        }
 
         // ── Table Filtering Logic ──────────────────────────
         function filterTable(tableRowsSelector, scopeFilterId, labelFilterId) {

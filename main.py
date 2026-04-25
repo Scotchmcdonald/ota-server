@@ -9,12 +9,13 @@ from authlib.integrations.starlette_client import OAuth
 from fastapi import Body, Depends, FastAPI, Form, Header, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from packaging.version import parse as parse_version
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy import create_engine, event
 from starlette.middleware.sessions import SessionMiddleware
-from models import Base, User, Team, APIKey, Device, Firmware, Label, UserRole, ScopeType, DeviceProfile, FirmwareRelease, ApplicationGroup
+from models import Base, User, Team, APIKey, Device, Firmware, Label, UserRole, ScopeType, DeviceProfile, FirmwareRelease, ApplicationGroup, AllowedEmail, AllowedDomain
 from auth import (
     oauth, hash_api_key, get_current_user_from_db, verify_api_key,
     get_current_user_scopes, verify_api_key_scope_access
@@ -22,6 +23,26 @@ from auth import (
 
 # =============================================================================
 app = FastAPI(title="ESP32 Fleet OTA Server")
+
+@app.exception_handler(StarletteHTTPException)
+async def custom_http_exception_handler(request: Request, exc: StarletteHTTPException):
+    accept = request.headers.get("accept", "")
+    if "text/html" in accept and not request.url.path.startswith("/admin/upload") and not request.url.path.startswith("/check-update"):
+        return HTMLResponse(
+            status_code=exc.status_code,
+            content=f"""
+            <html>
+                <body style="font-family: sans-serif; text-align: center; padding-top: 100px; background: #f9fafb; color: #333;">
+                    <div style="max-width: 400px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                        <h1 style="color: #ef4444; margin-top: 0;">Access Denied</h1>
+                        <p>{exc.detail}</p>
+                        <a href="/login" style="display: inline-block; margin-top: 15px; color: #3b82f6; text-decoration: none;">Return to Login</a>
+                    </div>
+                </body>
+            </html>
+            """
+        )
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", secrets.token_urlsafe(32))
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY)
@@ -48,6 +69,36 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base.metadata.create_all(bind=engine)
+
+# =============================================================================
+# Access Allowlist: Bootstrap from Env Var on First Run
+# =============================================================================
+def _seed_allowlist_from_env():
+    """
+    On startup, inject any emails from the ADMIN_EMAILS env var into the DB
+    if they are not already present. This bootstraps the first deployment so
+    the admin can log in and manage the list from the UI thereafter.
+    """
+    if not ADMIN_EMAILS:
+        return
+    db = SessionLocal()
+    try:
+        for email in ADMIN_EMAILS:
+            if not db.query(AllowedEmail).filter(AllowedEmail.email == email).first():
+                db.add(AllowedEmail(email=email, note="Seeded from ADMIN_EMAILS env var"))
+        db.commit()
+    finally:
+        db.close()
+
+
+def _is_email_allowed(email: str, db: Session) -> bool:
+    """Check if a normalized (lowercase) email is permitted by the DB allowlist."""
+    if db.query(AllowedEmail).filter(AllowedEmail.email == email).first():
+        return True
+    domain = email.split("@")[-1] if "@" in email else ""
+    if domain and db.query(AllowedDomain).filter(AllowedDomain.domain == domain).first():
+        return True
+    return False
 
 # =============================================================================
 # Shared Helpers
@@ -95,8 +146,11 @@ class TeamAssignRequest(BaseModel):
 # =============================================================================
 
 GOOGLE_OAUTH_REDIRECT_URI = os.getenv("GOOGLE_OAUTH_REDIRECT_URI")
-# Comma-separated allowlist of Google emails that may log in (e.g. "alice@example.com,bob@example.com").
-ADMIN_EMAILS = set(filter(None, os.getenv("ADMIN_EMAILS", "").split(",")))
+# Comma-separated allowlist used ONLY to seed the database on first run.
+ADMIN_EMAILS = set(e.strip().lower() for e in os.getenv("ADMIN_EMAILS", "").split(",") if e.strip())
+
+# Seed DB allowlist from env var before the first request is handled.
+_seed_allowlist_from_env()
 
 @app.get("/login", include_in_schema=False)
 async def login(request: Request):
@@ -134,11 +188,11 @@ async def auth_callback(request: Request, db: Session = Depends(get_db)):
 
     email = user_info.get("email", "").strip().lower()
 
-    # Enforce the whitelist immediately after receiving identity from Google.
-    if email not in ADMIN_EMAILS:
+    # Enforce the allowlist against the live database (supports domain wildcards).
+    if not _is_email_allowed(email, db):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Access denied: {email} is not an authorized admin.",
+            detail=f"Access denied: {email} is not on the authorized access list.",
         )
 
     user = db.query(User).filter(User.email == email).first()
@@ -191,16 +245,21 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     api_keys = user_info.api_keys
     new_key  = request.session.pop("new_key_flash", None)
 
+    allowed_emails  = db.query(AllowedEmail).order_by(AllowedEmail.created_at).all()  if user_info.role == UserRole.Admin else []
+    allowed_domains = db.query(AllowedDomain).order_by(AllowedDomain.created_at).all() if user_info.role == UserRole.Admin else []
+
     return templates.TemplateResponse(
         request=request,
         name="dashboard.html",
         context={
-            "user":      session_user,
-            "db_user":   user_info,
-            "devices":   devices,
-            "firmwares": firmware_releases,
-            "api_keys":  api_keys,
-            "new_key":   new_key,
+            "user":            session_user,
+            "db_user":         user_info,
+            "devices":         devices,
+            "firmwares":       firmware_releases,
+            "api_keys":        api_keys,
+            "new_key":         new_key,
+            "allowed_emails":  allowed_emails,
+            "allowed_domains": allowed_domains,
         },
     )
 
@@ -209,6 +268,87 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
 @app.get("/admin", include_in_schema=False)
 async def admin_redirect():
     return RedirectResponse(url="/dashboard")
+
+
+# =============================================================================
+# Access Management (Admin-only)
+# =============================================================================
+
+@app.post("/admin/access/emails/add")
+def access_add_email(
+    request: Request,
+    email:   str = Form(...),
+    note:    str = Form(""),
+    db:      Session = Depends(get_db),
+):
+    current_user = get_current_user_from_db(request, db)
+    if current_user.role != UserRole.Admin:
+        raise HTTPException(status_code=403, detail="Admin only.")
+    email = email.strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Invalid email address.")
+    if db.query(AllowedEmail).filter(AllowedEmail.email == email).first():
+        raise HTTPException(status_code=409, detail="Email already in allowlist.")
+    db.add(AllowedEmail(email=email, note=note.strip() or None))
+    db.commit()
+    return RedirectResponse(url="/dashboard?tab=access", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.post("/admin/access/emails/delete/{entry_id}")
+def access_delete_email(
+    entry_id: int,
+    request:  Request,
+    db:       Session = Depends(get_db),
+):
+    current_user = get_current_user_from_db(request, db)
+    if current_user.role != UserRole.Admin:
+        raise HTTPException(status_code=403, detail="Admin only.")
+    entry = db.query(AllowedEmail).filter(AllowedEmail.id == entry_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Entry not found.")
+    # Guard: prevent removing your own entry — would lock yourself out.
+    if entry.email == current_user.email:
+        raise HTTPException(status_code=400, detail="Cannot remove your own email from the allowlist.")
+    db.delete(entry)
+    db.commit()
+    return RedirectResponse(url="/dashboard?tab=access", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.post("/admin/access/domains/add")
+def access_add_domain(
+    request: Request,
+    domain:  str = Form(...),
+    note:    str = Form(""),
+    db:      Session = Depends(get_db),
+):
+    current_user = get_current_user_from_db(request, db)
+    if current_user.role != UserRole.Admin:
+        raise HTTPException(status_code=403, detail="Admin only.")
+    domain = domain.strip().lower().lstrip("@")
+    if not domain or "." not in domain:
+        raise HTTPException(status_code=400, detail="Invalid domain (e.g. borealtek.ca).")
+    if db.query(AllowedDomain).filter(AllowedDomain.domain == domain).first():
+        raise HTTPException(status_code=409, detail="Domain already in allowlist.")
+    db.add(AllowedDomain(domain=domain, note=note.strip() or None))
+    db.commit()
+    return RedirectResponse(url="/dashboard?tab=access", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.post("/admin/access/domains/delete/{entry_id}")
+def access_delete_domain(
+    entry_id: int,
+    request:  Request,
+    db:       Session = Depends(get_db),
+):
+    current_user = get_current_user_from_db(request, db)
+    if current_user.role != UserRole.Admin:
+        raise HTTPException(status_code=403, detail="Admin only.")
+    entry = db.query(AllowedDomain).filter(AllowedDomain.id == entry_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Entry not found.")
+    db.delete(entry)
+    db.commit()
+    return RedirectResponse(url="/dashboard?tab=access", status_code=status.HTTP_303_SEE_OTHER)
 
 
 # =============================================================================
