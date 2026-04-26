@@ -71,6 +71,8 @@ class APIKey(Base):
     id = Column(Integer, primary_key=True, index=True)
     key_hash = Column(String, nullable=False, index=True)
     label = Column(String, nullable=True)
+    # Legacy compatibility: some deployed DBs still enforce owner_id NOT NULL.
+    owner_id = Column(Integer, nullable=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     last_used_at = Column(DateTime, nullable=True)

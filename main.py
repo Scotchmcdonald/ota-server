@@ -107,11 +107,15 @@ def _migrate_legacy_sqlite_schema() -> None:
         if "user_id" not in api_key_columns:
             conn.execute(text("ALTER TABLE api_keys ADD COLUMN user_id INTEGER"))
 
+        if "owner_id" not in api_key_columns:
+            conn.execute(text("ALTER TABLE api_keys ADD COLUMN owner_id INTEGER"))
+
         if "last_used_at" not in api_key_columns:
             conn.execute(text("ALTER TABLE api_keys ADD COLUMN last_used_at DATETIME"))
 
         if "owner_id" in api_key_columns:
             conn.execute(text("UPDATE api_keys SET user_id = owner_id WHERE user_id IS NULL"))
+            conn.execute(text("UPDATE api_keys SET owner_id = user_id WHERE owner_id IS NULL"))
 
 
 _migrate_legacy_sqlite_schema()
@@ -712,6 +716,7 @@ def admin_delete_team(
 @app.post("/admin/generate-key")
 def generate_key(
     request: Request,
+    label:   Optional[str] = Form(None),
     db:      Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -723,9 +728,12 @@ def generate_key(
     """
     raw_key = secrets.token_urlsafe(32)
 
+    token_label = (label or "").strip() or f"Generated {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC"
+
     db.add(APIKey(
         key_hash=hash_api_key(raw_key),
-        label=f"Generated {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC",
+        label=token_label,
+        owner_id=current_user.id,
         user_id=current_user.id,
     ))
     db.commit()
