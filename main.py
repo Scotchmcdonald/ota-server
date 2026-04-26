@@ -261,10 +261,14 @@ async def auth_callback(request: Request, db: Session = Depends(get_db)):
 
     user = db.query(User).filter(User.email == email).first()
     if not user:
-        # Give admin role if email is in the ADMIN_EMAILS allowlist
+        # Give admin role if email is in the ADMIN_EMAILS allowlist.
         role = UserRole.Admin if email in ADMIN_EMAILS else UserRole.User
         user = User(email=email, name=user_info.get("name", ""), role=role)
         db.add(user)
+        db.commit()
+    elif email in ADMIN_EMAILS and user.role != UserRole.Admin:
+        # Promote legacy records created before ADMIN_EMAILS included this user.
+        user.role = UserRole.Admin
         db.commit()
 
     request.session["user"] = {"email": email, "name": user_info.get("name", ""), "role": user.role.value}
