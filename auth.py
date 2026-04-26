@@ -97,9 +97,9 @@ def verify_api_key_scope_access(
     api_key: APIKey = Depends(verify_api_key)
 ) -> User:
     """
-    Verifies the owner of the API Key has explicit rights to write to the requested scope_type & target_id.
+    Verifies the user bound to the API Key has explicit rights to write to the requested scope_type & target_id.
     """
-    user = api_key.owner
+    user = api_key.user
     if user.role.value == "Admin": 
         return user
         
@@ -107,6 +107,6 @@ def verify_api_key_scope_access(
     if (scope_type, target_id) not in allowed_scopes:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="The API Key owner does not have explicit access to this scope."
+            detail="The API Key user does not have explicit access to this scope."
         )
     return user

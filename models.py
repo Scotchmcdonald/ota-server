@@ -54,7 +54,7 @@ class User(Base):
     role = Column(Enum(UserRole), default=UserRole.User, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    api_keys = relationship("APIKey", back_populates="owner", cascade="all, delete-orphan")
+    api_tokens = relationship("APIKey", back_populates="user", cascade="all, delete-orphan")
     teams = relationship("Team", secondary=user_team_association, back_populates="members")
 
 class Team(Base):
@@ -71,10 +71,10 @@ class APIKey(Base):
     id = Column(Integer, primary_key=True, index=True)
     key_hash = Column(String, nullable=False, index=True)
     label = Column(String, nullable=True)
-    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    owner = relationship("User", back_populates="api_keys")
+    user = relationship("User", back_populates="api_tokens")
 
 class Label(Base):
     __tablename__ = "labels"

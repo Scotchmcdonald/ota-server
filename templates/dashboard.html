@@ -42,6 +42,7 @@
                     <button class="tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-sky-400 bg-slate-700/50 shadow" data-target="tab-onboard">Onboard</button>
                     <button class="tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-700/30" data-target="tab-deploy">Deploy</button>
                     <button class="tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-700/30" data-target="tab-fleet">Fleet</button>
+                    <button class="tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-fuchsia-400 hover:text-fuchsia-200 hover:bg-slate-700/30" data-target="tab-tokens">Tokens</button>
                     {% if db_user and db_user.role.value == 'Admin' %}
                     <button class="tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-rose-400 hover:text-rose-200 hover:bg-slate-700/30" data-target="tab-admin">Admin</button>
                     <button class="tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-amber-400 hover:text-amber-200 hover:bg-slate-700/30" data-target="tab-access">Access</button>
@@ -68,6 +69,7 @@
             <button class="tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-sky-400 bg-slate-700/50 shadow" data-target="tab-onboard">Onboard</button>
             <button class="tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-slate-400 bg-slate-800/50" data-target="tab-deploy">Deploy</button>
             <button class="tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-slate-400 bg-slate-800/50" data-target="tab-fleet">Fleet</button>
+            <button class="tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-fuchsia-400 bg-slate-800/50" data-target="tab-tokens">Tokens</button>
             {% if db_user and db_user.role.value == 'Admin' %}
             <button class="tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-rose-400 bg-slate-800/50" data-target="tab-admin">Admin</button>
             <button class="tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-amber-400 bg-slate-800/50" data-target="tab-access">Access</button>
@@ -220,8 +222,11 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-800/50 bg-slate-900/20">
-                        {% for node in fleet_nodes|default([{'mac': 'F0:E1:D2:C3:B4:A5', 'scope': 'Personal', 'labels': ['testing', 'v1-hw'], 'fw': 'v1.4.1', 'batt': 88, 'status': 'online'}, {'mac': '11:22:33:44:55:66', 'scope': 'Team Alpha', 'labels': ['production'], 'fw': 'v1.4.2', 'batt': 14, 'status': 'offline'}]) %}
-                        <tr class="hover:bg-slate-800/40 transition-colors fleet-row" data-scope="{{ node.scope|lower }}" data-labels="{{ node.labels|join(',')|lower }}">
+                        {% for node in fleet_nodes|default([
+                            {'mac': 'F0:E1:D2:C3:B4:A5', 'scope': 'Personal', 'scope_slug': 'personal', 'labels': ['testing', 'v1-hw'], 'fw': 'v1.4.1', 'batt': 88, 'status': 'online', 'device_profile_id': 1, 'firmware_override_id': None},
+                            {'mac': '11:22:33:44:55:66', 'scope': 'Team Alpha', 'scope_slug': 'team-alpha', 'labels': ['production'], 'fw': 'v1.4.2', 'batt': 14, 'status': 'offline', 'device_profile_id': None, 'firmware_override_id': None}
+                        ]) %}
+                        <tr class="hover:bg-slate-800/40 transition-colors fleet-row" data-scope="{{ node.scope_slug|lower }}" data-labels="{{ node.labels|join(',')|lower }}">
                             <td class="px-6 py-4 whitespace-nowrap text-sky-300 font-mono text-sm tracking-widest">{{ node.mac }}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-slate-400 text-xs uppercase">{{ node.scope }}</td>
                             <td class="px-6 py-4 whitespace-nowrap">
@@ -254,10 +259,16 @@
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-right">
                                 <div class="flex items-center justify-end gap-2">
+                                    <button
+                                        type="button"
+                                        onclick='openManageDeviceModal({{ node.mac|tojson }}, {{ node.scope_slug|tojson }}, {{ node.labels|tojson }}, {{ node.device_profile_id|tojson }}, {{ node.firmware_override_id|tojson }})'
+                                        class="px-2.5 py-1 text-[9px] font-bold tracking-widest uppercase rounded bg-amber-900/40 text-amber-300 border border-amber-700/50 hover:bg-amber-600 hover:text-white transition-all"
+                                    >
+                                        Manage
+                                    </button>
                                     <form action="/api/fleet/unclaim/{{ node.mac }}" method="POST" class="admin-guard-form" data-confirm="Unclaim {{ node.mac }}?" data-success-redirect="/dashboard?tab=fleet">
                                         <button type="submit" class="px-2.5 py-1 text-[9px] font-bold tracking-widest uppercase rounded bg-rose-900/40 text-rose-400 border border-rose-700/50 hover:bg-rose-600 hover:text-white transition-all">Unclaim</button>
                                     </form>
-                                    <button type="button" onclick="overrideFirmware('{{ node.mac }}')" class="px-2.5 py-1 text-[9px] font-bold tracking-widest uppercase rounded bg-amber-900/40 text-amber-400 border border-amber-700/50 hover:bg-amber-600 hover:text-white transition-all">Override FW</button>
                                 </div>
                             </td>
                         </tr>
@@ -278,7 +289,7 @@
                 <p class="text-sm text-rose-400/70 font-mono mt-1">Global management, teams, and API keys</p>
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="grid grid-cols-1 lg:grid-cols-1 gap-6">
                 <!-- Create Teams -->
                 <div class="glass-panel p-6 rounded-xl border-t border-t-rose-500/30">
                     <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest mb-4 border-b border-slate-700/50 pb-2">Org Structure</h3>
@@ -303,39 +314,51 @@
                     </div>
                 </div>
 
-                <!-- API Keys -->
-                <div class="glass-panel p-6 rounded-xl border-t border-t-fuchsia-500/30">
-                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest mb-4 border-b border-slate-700/50 pb-2">Global API Keys</h3>
-                    <p class="text-[10px] text-slate-500 font-mono mb-4">Keys generated here inherit Admin capabilities.</p>
-                    
-                    <form action="/admin/tokens/generate" method="POST" class="mb-4 admin-guard-form" data-success-redirect="/dashboard?tab=admin">
-                        <button type="submit" class="w-full flex items-center justify-center gap-2 rounded p-2.5 text-xs font-bold tracking-widest uppercase text-white bg-fuchsia-700/80 hover:bg-fuchsia-600 shadow-[0_0_15px_rgba(192,38,211,0.3)] transition-all">
-                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"></path></svg>
-                            Generate Root Token
-                        </button>
-                    </form>
-
-                    <div class="space-y-2 max-h-40 overflow-y-auto pr-1">
-                        {% for token in api_tokens|default([{'id': 41, 'name': 'CI/CD Pipeline', 'preview': 'token_8f92a1...'}]) %}
-                        <div class="flex items-center justify-between bg-slate-800/60 border border-slate-700/60 rounded px-3 py-2">
-                            <div>
-                                <p class="text-[10px] font-mono text-slate-300">{{ token.name }}</p>
-                                <p class="text-[9px] font-mono text-slate-500">ID #{{ token.id }} - {{ token.preview }}</p>
-                            </div>
-                            <form action="/admin/tokens/revoke/{{ token.id }}" method="POST" class="admin-guard-form" data-confirm="Revoke this token?" data-success-redirect="/dashboard?tab=admin">
-                                <button type="submit" class="text-[9px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Revoke</button>
-                            </form>
-                        </div>
-                        {% else %}
-                        <p class="text-xs text-slate-600 font-mono py-3 text-center">No API tokens available.</p>
-                        {% endfor %}
-                    </div>
-                </div>
             </div>
         </section>
         {% endif %}
 
-        <!-- ---------------- TAB 5: ACCESS ---------------- -->
+        <!-- ---------------- TAB 5: TOKENS ---------------- -->
+        <section id="tab-tokens" class="tab-content space-y-6">
+            <div class="border-b border-fuchsia-900/50 pb-4">
+                <h2 class="text-2xl font-light text-fuchsia-100">Personal Access Tokens</h2>
+                <p class="text-sm text-fuchsia-400/70 font-mono mt-1">Tokens inherit your account permissions.</p>
+            </div>
+
+            <div class="glass-panel p-6 rounded-xl border-t border-t-fuchsia-500/30">
+                {% if new_key %}
+                <div class="mb-4 p-3 rounded border border-emerald-700/60 bg-emerald-950/30">
+                    <p class="text-[10px] uppercase font-bold tracking-wider text-emerald-300 mb-1">Copy now (shown once)</p>
+                    <p class="text-xs font-mono text-emerald-200 break-all">{{ new_key }}</p>
+                </div>
+                {% endif %}
+
+                <form action="/api/tokens/generate" method="POST" class="mb-4" data-success-redirect="/dashboard?tab=tokens">
+                    <button type="submit" class="w-full flex items-center justify-center gap-2 rounded p-2.5 text-xs font-bold tracking-widest uppercase text-white bg-fuchsia-700/80 hover:bg-fuchsia-600 shadow-[0_0_15px_rgba(192,38,211,0.3)] transition-all">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"></path></svg>
+                        Generate Personal Access Token
+                    </button>
+                </form>
+
+                <div class="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {% for token in api_tokens %}
+                    <div class="flex items-center justify-between bg-slate-800/60 border border-slate-700/60 rounded px-3 py-2">
+                        <div>
+                            <p class="text-[10px] font-mono text-slate-300">{{ token.label or ('Token #' ~ token.id) }}</p>
+                            <p class="text-[9px] font-mono text-slate-500">ID #{{ token.id }} - Created {{ token.created_at }}</p>
+                        </div>
+                        <form action="/api/tokens/revoke/{{ token.id }}" method="POST" data-confirm="Revoke this token?" data-success-redirect="/dashboard?tab=tokens">
+                            <button type="submit" class="text-[9px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Revoke</button>
+                        </form>
+                    </div>
+                    {% else %}
+                    <p class="text-xs text-slate-600 font-mono py-3 text-center">No personal access tokens available.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </section>
+
+        <!-- ---------------- TAB 6: ACCESS ---------------- -->
         {% if db_user and db_user.role.value == 'Admin' %}
         <section id="tab-access" class="tab-content space-y-6">
             <div class="border-b border-amber-900/50 pb-4">
@@ -435,20 +458,11 @@
                 </div>
 
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Device Profile</label>
-                    <select name="device_profile_id" required class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-sky-500 outline-none">
-                        {% for profile in device_profiles|default([{'id': 1, 'name': 'FeatherS3_EnvSensor'}]) %}
-                        <option value="{{ profile.id }}">{{ profile.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div>
                     <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Assignment Scope</label>
                     <select name="scope" class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-sky-500 outline-none">
-                        <option value="personal">Personal (Isolated)</option>
-                        <option value="team-alpha">Team Alpha</option>
-                        <option value="team-engineering">Engineering</option>
+                        {% for scope_option in scope_options|default([{'value': 'personal', 'label': 'Personal (Isolated)'}]) %}
+                        <option value="{{ scope_option.value }}">{{ scope_option.label }}</option>
+                        {% endfor %}
                     </select>
                 </div>
 
@@ -460,6 +474,67 @@
                 <div class="pt-2 flex gap-3">
                     <button type="button" onclick="closeClaimModal()" class="flex-1 py-2.5 text-xs font-bold uppercase rounded border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors">Cancel</button>
                     <button type="submit" class="flex-1 py-2.5 text-xs font-bold uppercase rounded bg-sky-600 text-white hover:bg-sky-500 shadow-[0_0_15px_rgba(14,165,233,0.4)] transition-all">Confirm Claim</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Manage Device Modal -->
+    <div id="manage-device-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+        <div id="manage-device-modal-content" class="glass-panel p-6 rounded-xl shadow-[0_0_40px_rgba(0,0,0,0.8)] max-w-lg w-full border border-amber-500/30 transform scale-95 opacity-0 transition-all duration-200">
+            <div class="flex justify-between items-center mb-5">
+                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-widest flex items-center gap-2">
+                    <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-3-3v6m9 0A9 9 0 1112 3a9 9 0 019 9z"></path></svg>
+                    Manage Device
+                </h3>
+                <button onclick="closeManageDeviceModal()" type="button" class="text-slate-500 border border-slate-700 rounded hover:text-white hover:bg-rose-500 hover:border-rose-500 transition-colors p-1" title="Close">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <form action="/api/fleet/devices/__MAC__/update" method="POST" id="manage-device-form" class="space-y-5 admin-guard-form" data-success-redirect="/dashboard?tab=fleet">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Target MAC</label>
+                    <input type="text" id="manage-device-mac" readonly class="w-full bg-slate-900/80 border border-slate-700 rounded py-2 px-3 text-sm font-mono text-amber-300 outline-none cursor-not-allowed">
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Assignment Scope</label>
+                    <select name="scope" id="manage-device-scope" class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none">
+                        {% for scope_option in scope_options|default([{'value': 'personal', 'label': 'Personal (Isolated)'}]) %}
+                        <option value="{{ scope_option.value }}">{{ scope_option.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Labels (Comma separated)</label>
+                    <input type="text" name="labels" id="manage-device-labels" placeholder="testing, office-hvac" class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none placeholder-slate-500">
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Hardware Profile</label>
+                    <select name="device_profile_id" id="manage-device-profile" class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none">
+                        <option value="">None (Unassigned)</option>
+                        {% for profile in device_profiles|default([{'id': 1, 'name': 'FeatherS3_EnvSensor'}]) %}
+                        <option value="{{ profile.id }}">{{ profile.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Firmware Override</label>
+                    <select name="firmware_override_id" id="manage-device-override" class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none">
+                        <option value="">None (Follow Fleet Target)</option>
+                        {% for fw in firmwares %}
+                        <option value="{{ fw.id }}">#{{ fw.id }} - {{ fw.version }} ({{ fw.device_profile.name if fw.device_profile else 'No Profile' }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="pt-2 flex gap-3">
+                    <button type="button" onclick="closeManageDeviceModal()" class="flex-1 py-2.5 text-xs font-bold uppercase rounded border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors">Cancel</button>
+                    <button type="submit" class="flex-1 py-2.5 text-xs font-bold uppercase rounded bg-amber-600 text-white hover:bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.35)] transition-all">Save Changes</button>
                 </div>
             </form>
         </div>
@@ -582,6 +657,7 @@
         function getTabColor(tabTarget, isActive) {
             if (tabTarget === 'tab-admin')  return isActive ? 'text-rose-400'  : 'text-rose-400 hover:text-rose-200';
             if (tabTarget === 'tab-access') return isActive ? 'text-amber-400' : 'text-amber-400 hover:text-amber-200';
+            if (tabTarget === 'tab-tokens') return isActive ? 'text-fuchsia-400' : 'text-fuchsia-400 hover:text-fuchsia-200';
             return isActive ? 'text-sky-400' : 'text-slate-400 hover:text-slate-200';
         }
 
@@ -667,6 +743,14 @@
         const claimModal = document.getElementById('claim-modal');
         const claimModalContent = document.getElementById('claim-modal-content');
         const claimMacInput = document.getElementById('claim-mac');
+        const manageDeviceModal = document.getElementById('manage-device-modal');
+        const manageDeviceModalContent = document.getElementById('manage-device-modal-content');
+        const manageDeviceForm = document.getElementById('manage-device-form');
+        const manageDeviceMacInput = document.getElementById('manage-device-mac');
+        const manageDeviceScopeInput = document.getElementById('manage-device-scope');
+        const manageDeviceLabelsInput = document.getElementById('manage-device-labels');
+        const manageDeviceProfileInput = document.getElementById('manage-device-profile');
+        const manageDeviceOverrideInput = document.getElementById('manage-device-override');
         const uploadModal = document.getElementById('upload-modal');
         const uploadModalContent = document.getElementById('upload-modal-content');
         const uploadForm = document.getElementById('upload-form');
@@ -809,6 +893,57 @@
             }, 200);
         }
 
+        function openManageDeviceModal(mac, scope, labels, profile, override) {
+            if (manageDeviceMacInput) manageDeviceMacInput.value = mac || '';
+            if (manageDeviceScopeInput) manageDeviceScopeInput.value = scope || 'personal';
+
+            if (manageDeviceLabelsInput) {
+                if (Array.isArray(labels)) {
+                    manageDeviceLabelsInput.value = labels.join(', ');
+                } else {
+                    manageDeviceLabelsInput.value = labels || '';
+                }
+            }
+
+            if (manageDeviceProfileInput) {
+                manageDeviceProfileInput.value = profile != null ? String(profile) : '';
+            }
+
+            if (manageDeviceOverrideInput) {
+                manageDeviceOverrideInput.value = override != null ? String(override) : '';
+            }
+
+            if (manageDeviceForm) {
+                const encodedMac = encodeURIComponent(mac || '');
+                manageDeviceForm.action = `/api/fleet/devices/${encodedMac}/update`;
+            }
+
+            if (manageDeviceModal) {
+                manageDeviceModal.classList.remove('hidden');
+                manageDeviceModal.classList.add('flex');
+            }
+
+            setTimeout(() => {
+                if (manageDeviceModalContent) {
+                    manageDeviceModalContent.classList.remove('scale-95', 'opacity-0');
+                    manageDeviceModalContent.classList.add('scale-100', 'opacity-100');
+                }
+            }, 10);
+        }
+
+        function closeManageDeviceModal() {
+            if (manageDeviceModalContent) {
+                manageDeviceModalContent.classList.remove('scale-100', 'opacity-100');
+                manageDeviceModalContent.classList.add('scale-95', 'opacity-0');
+            }
+            setTimeout(() => {
+                if (manageDeviceModal) {
+                    manageDeviceModal.classList.add('hidden');
+                    manageDeviceModal.classList.remove('flex');
+                }
+            }, 200);
+        }
+
         function openUploadModal() {
             if (uploadModal) {
                 uploadModal.classList.remove('hidden');
@@ -890,6 +1025,9 @@
             if (e.key === 'Escape' && uploadModal && !uploadModal.classList.contains('hidden')) {
                 closeUploadModal();
             }
+            if (e.key === 'Escape' && manageDeviceModal && !manageDeviceModal.classList.contains('hidden')) {
+                closeManageDeviceModal();
+            }
             if (e.key === 'Escape' && distributeModal && !distributeModal.classList.contains('hidden')) {
                 closeDistributeModal();
             }
@@ -905,6 +1043,12 @@
         uploadModal?.addEventListener('click', (e) => {
             if (e.target === uploadModal) {
                 closeUploadModal();
+            }
+        });
+
+        manageDeviceModal?.addEventListener('click', (e) => {
+            if (e.target === manageDeviceModal) {
+                closeManageDeviceModal();
             }
         });
 
@@ -945,50 +1089,6 @@
         distributeModal?.addEventListener('click', (e) => {
             if (e.target === distributeModal) closeDistributeModal();
         });
-
-        function overrideFirmware(mac) {
-            const firmwareId = prompt(`Enter Firmware ID to push to ${mac}:`);
-            if (firmwareId === null) return; // user cancelled
-            if (!firmwareId.trim()) {
-                showToast('Firmware ID cannot be empty.', 'error');
-                return;
-            }
-            try {
-                const body = new FormData();
-                body.append('firmware_id', firmwareId.trim());
-
-                fetch(`/api/fleet/override/${mac}`, {
-                    method: 'POST',
-                    body,
-                    credentials: 'same-origin',
-                    headers: { 'Accept': 'application/json' },
-                }).then(async (response) => {
-                    let payload = null;
-                    try {
-                        payload = await response.json();
-                    } catch (_) {
-                        payload = null;
-                    }
-
-                    if (!response.ok) {
-                        let msg = getErrorMessage(payload, 'Override failed.');
-                        if (response.status === 403) {
-                            msg = normalizeAdminDeniedMessage(msg);
-                        }
-                        throw new Error(msg);
-                    }
-
-                    showToast('Firmware override applied.', 'success');
-                    setTimeout(() => {
-                        window.location.href = '/dashboard?tab=fleet';
-                    }, 450);
-                }).catch((err) => {
-                    showToast(err?.message || 'Override failed.', 'error');
-                });
-            } catch (_) {
-                showToast('Override failed.', 'error');
-            }
-        }
 
         function refreshData(e) {
             const btn = e.currentTarget;

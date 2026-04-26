@@ -3,7 +3,7 @@ import os
 import re
 import secrets
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Tuple
 
 from authlib.integrations.starlette_client import OAuth
 from fastapi import Body, Depends, FastAPI, Form, Header, HTTPException, Request, UploadFile, status
@@ -13,7 +13,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from packaging.version import parse as parse_version
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy import create_engine, event, text
+from sqlalchemy import create_engine, event, text, and_, or_, false
 from starlette.middleware.sessions import SessionMiddleware
 from models import Base, User, Team, APIKey, Device, Firmware, Label, UserRole, ScopeType, DeviceProfile, FirmwareRelease, ApplicationGroup, AllowedEmail, AllowedDomain
 from auth import (
@@ -101,6 +101,15 @@ def _migrate_legacy_sqlite_schema() -> None:
         if "firmware_override_id" not in existing_columns:
             conn.execute(text("ALTER TABLE devices ADD COLUMN firmware_override_id INTEGER"))
 
+        api_key_table_info = conn.execute(text("PRAGMA table_info(api_keys)"))
+        api_key_columns = {row[1] for row in api_key_table_info.fetchall()}
+
+        if "user_id" not in api_key_columns:
+            conn.execute(text("ALTER TABLE api_keys ADD COLUMN user_id INTEGER"))
+
+        if "owner_id" in api_key_columns:
+            conn.execute(text("UPDATE api_keys SET user_id = owner_id WHERE user_id IS NULL"))
+
 
 _migrate_legacy_sqlite_schema()
 
@@ -153,8 +162,43 @@ def get_db():
     finally:
         db.close()
 
+
+def get_current_user(
+    request: Request,
+    db: Session = Depends(get_db),
+    authorization: Optional[str] = Header(default=None),
+) -> User:
+    """
+    Dual auth resolution:
+    1) Authorization: Bearer <token>
+    2) OAuth session fallback
+    """
+    if authorization:
+        scheme, _, raw_token = authorization.partition(" ")
+        if scheme.lower() != "bearer" or not raw_token.strip():
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid Authorization header format. Expected: Bearer <token>.",
+            )
+
+        key_hash = hash_api_key(raw_token.strip())
+        api_key = db.query(APIKey).filter(APIKey.key_hash == key_hash).first()
+        if not api_key:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid personal access token.",
+            )
+        if not api_key.user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token is not bound to a valid user.",
+            )
+        return api_key.user
+
+    return get_current_user_from_db(request, db)
+
 def require_admin_user(request: Request, db: Session = Depends(get_db)) -> User:
-    user = get_current_user_from_db(request, db)
+    user = get_current_user(request, db, request.headers.get("Authorization"))
     if user.role != UserRole.Admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -175,13 +219,93 @@ def require_admin_actor(
         api_key = db.query(APIKey).filter(APIKey.key_hash == key_hash).first()
         if not api_key:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key.")
-        if api_key.owner.role != UserRole.Admin:
+        if api_key.user.role != UserRole.Admin:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin API key required.")
-        return api_key.owner
+        return api_key.user
     return require_admin_user(request, db)
 
 def _scope_slug(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", (value or "").lower()).strip("-")
+
+
+def _resolve_scope_selection(scope: str, user: User, db: Session) -> Tuple[ScopeType, int, str]:
+    scope_slug = _scope_slug(scope)
+    if scope_slug == "personal":
+        return ScopeType.Personal, user.id, "Personal"
+
+    team = None
+    for t in db.query(Team).all():
+        if _scope_slug(t.name) == scope_slug:
+            team = t
+            break
+
+    if not team:
+        raise HTTPException(status_code=400, detail="Unknown scope.")
+
+    return ScopeType.Team, team.id, team.name
+
+
+def _has_scope_access(user: User, scope_type: ScopeType, scope_id: int) -> bool:
+    if user.role == UserRole.Admin:
+        return True
+    return (scope_type, scope_id) in get_current_user_scopes(user=user)
+
+
+def _can_manage_device(user: User, device: Device) -> bool:
+    if user.role == UserRole.Admin:
+        return True
+    if not device.scope_type or device.scope_id is None:
+        return False
+    return (device.scope_type, device.scope_id) in get_current_user_scopes(user=user)
+
+
+def _parse_optional_int(value: Optional[str], field_name: str) -> Optional[int]:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    if cleaned == "":
+        return None
+    try:
+        return int(cleaned)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid {field_name}.")
+
+
+def _upsert_labels_for_device(device: Device, labels_csv: str, db: Session) -> None:
+    parsed_labels = [l.strip().lower() for l in (labels_csv or "").split(",") if l.strip()]
+    if not parsed_labels:
+        device.labels = []
+        return
+
+    existing = db.query(Label).filter(Label.name.in_(parsed_labels)).all()
+    existing_by_name = {lbl.name: lbl for lbl in existing}
+    resolved_labels = []
+
+    for name in parsed_labels:
+        lbl = existing_by_name.get(name)
+        if not lbl:
+            lbl = Label(name=name, color="#3b82f6")
+            db.add(lbl)
+            existing_by_name[name] = lbl
+        resolved_labels.append(lbl)
+
+    device.labels = resolved_labels
+
+
+def _device_scope_label(device: Device, user: User, team_name_by_id: dict[int, str]) -> str:
+    if device.scope_type == ScopeType.Personal:
+        return "Personal"
+    if device.scope_type == ScopeType.Team:
+        return team_name_by_id.get(device.scope_id, "Team")
+    return "Unassigned"
+
+
+def _device_scope_slug(device: Device, team_name_by_id: dict[int, str]) -> str:
+    if device.scope_type == ScopeType.Personal:
+        return "personal"
+    if device.scope_type == ScopeType.Team:
+        return _scope_slug(team_name_by_id.get(device.scope_id, "team"))
+    return ""
 
 def is_newer_version(v1: str, v2: str) -> bool:
     """Returns True if v1 is semantically newer than v2."""
@@ -305,7 +429,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     if not session_user:
         return RedirectResponse(url="/login")
 
-    user_info = get_current_user_from_db(request, db)
+    user_info = get_current_user(request, db, request.headers.get("Authorization"))
 
     # Keep session role in sync with the DB in case roles were reconciled
     # during startup or by later admin operations.
@@ -313,18 +437,55 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     request.session["user"] = session_user
 
     if user_info.role == UserRole.Admin:
-        devices          = db.query(Device).all()
-        firmware_releases = db.query(FirmwareRelease).order_by(FirmwareRelease.id.desc()).all()
+        visible_claimed_devices = db.query(Device).filter(Device.claimed == True).all()
+        scope_options = [{"value": "personal", "label": "Personal (Isolated)"}] + [
+            {"value": _scope_slug(team.name), "label": team.name}
+            for team in db.query(Team).order_by(Team.name.asc()).all()
+        ]
     else:
         team_ids = [t.id for t in user_info.teams]
-        devices = db.query(Device).filter(
-            (Device.scope_type == ScopeType.Team)     & Device.scope_id.in_(team_ids) |
-            (Device.scope_type == ScopeType.Personal) & (Device.scope_id == user_info.id)
-        ).all()
-        firmware_releases = db.query(FirmwareRelease).order_by(FirmwareRelease.id.desc()).all()
+        scope_filter = or_(
+            and_(Device.scope_type == ScopeType.Team, Device.scope_id.in_(team_ids) if team_ids else false()),
+            and_(Device.scope_type == ScopeType.Personal, Device.scope_id == user_info.id),
+        )
+        visible_claimed_devices = db.query(Device).filter(Device.claimed == True, scope_filter).all()
+        scope_options = [{"value": "personal", "label": "Personal (Isolated)"}] + [
+            {"value": _scope_slug(team.name), "label": team.name}
+            for team in sorted(user_info.teams, key=lambda t: t.name.lower())
+        ]
 
-    api_keys = user_info.api_keys
-    api_tokens = db.query(APIKey).order_by(APIKey.id.desc()).all() if user_info.role == UserRole.Admin else []
+    unclaimed_devices = db.query(Device).filter(Device.claimed == False).all()
+    firmware_releases = db.query(FirmwareRelease).order_by(FirmwareRelease.id.desc()).all()
+    teams = db.query(Team).all()
+    team_name_by_id = {team.id: team.name for team in teams}
+
+    fleet_nodes = []
+    for device in visible_claimed_devices:
+        labels = [lbl.name for lbl in (device.labels or [])]
+        last_checkin = device.last_checkin
+        is_online = bool(last_checkin and (datetime.utcnow() - last_checkin).total_seconds() <= 900)
+        fleet_nodes.append({
+            "mac": device.mac_address,
+            "scope": _device_scope_label(device, user_info, team_name_by_id),
+            "scope_slug": _device_scope_slug(device, team_name_by_id),
+            "labels": labels,
+            "labels_csv": ", ".join(labels),
+            "fw": device.version or "unknown",
+            "batt": int(device.battery) if device.battery is not None else 0,
+            "status": "online" if is_online else "offline",
+            "device_profile_id": device.device_profile_id,
+            "firmware_override_id": device.firmware_override_id,
+        })
+
+    unclaimed_rows = [
+        {
+            "mac_address": d.mac_address,
+            "last_seen": d.last_checkin.isoformat() if d.last_checkin else "Unknown",
+        }
+        for d in unclaimed_devices
+    ]
+
+    api_tokens = db.query(APIKey).filter(APIKey.user_id == user_info.id).order_by(APIKey.id.desc()).all()
     new_key  = request.session.pop("new_key_flash", None)
     device_profiles = db.query(DeviceProfile).order_by(DeviceProfile.name.asc()).all()
     application_groups = db.query(ApplicationGroup).order_by(ApplicationGroup.name.asc()).all()
@@ -338,13 +499,15 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         context={
             "user":            session_user,
             "db_user":         user_info,
-            "devices":         devices,
+            "devices":         visible_claimed_devices,
             "firmwares":       firmware_releases,
-            "api_keys":        api_keys,
             "api_tokens":      api_tokens,
             "new_key":         new_key,
             "device_profiles": device_profiles,
             "application_groups": application_groups,
+            "scope_options":   scope_options,
+            "fleet_nodes":     fleet_nodes,
+            "unclaimed_devices": unclaimed_rows,
             "allowed_emails":  allowed_emails,
             "allowed_domains": allowed_domains,
         },
@@ -486,12 +649,13 @@ def admin_assign_team(
 # API Key Management (OAuth-protected)
 # =============================================================================
 
+@app.post("/api/tokens/generate")
 @app.post("/admin/tokens/generate")
 @app.post("/admin/generate-key")
 def generate_key(
     request: Request,
     db:      Session = Depends(get_db),
-    current_user: User = Depends(require_admin_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Generate a cryptographically secure API key for the authenticated user.
@@ -504,25 +668,25 @@ def generate_key(
     db.add(APIKey(
         key_hash=hash_api_key(raw_key),
         label=f"Generated {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC",
-        owner_id=current_user.id,
+        user_id=current_user.id,
     ))
     db.commit()
 
     request.session["new_key_flash"] = raw_key
-    return RedirectResponse(url="/dashboard?tab=admin", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url="/dashboard?tab=tokens", status_code=status.HTTP_303_SEE_OTHER)
 
 
+@app.post("/api/tokens/revoke/{key_id}")
 @app.post("/admin/tokens/revoke/{key_id}")
 @app.post("/admin/delete-key/{key_id}")
 def delete_key(
     key_id:  int,
     request: Request,
     db:      Session = Depends(get_db),
-    current_user: User = Depends(require_admin_user),
+    current_user: User = Depends(get_current_user),
 ):
-    """Revoke an API key. Admin only."""
+    """Revoke an API key. Users can revoke own keys; Admin can revoke any key."""
     _ = request
-    _ = current_user
 
     key = db.query(APIKey).filter(
         APIKey.id == key_id,
@@ -530,9 +694,12 @@ def delete_key(
     if not key:
         raise HTTPException(status_code=404, detail="API key not found.")
 
+    if current_user.role != UserRole.Admin and key.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You can only revoke your own tokens.")
+
     db.delete(key)
     db.commit()
-    return RedirectResponse(url="/dashboard?tab=admin", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url="/dashboard?tab=tokens", status_code=status.HTTP_303_SEE_OTHER)
 
 
 # =============================================================================
@@ -817,7 +984,6 @@ def claim_device(
 def claim_device_from_form(
     request: Request,
     mac: str = Form(...),
-    device_profile_id: int = Form(...),
     scope: str = Form(...),
     labels: str = Form(""),
     db: Session = Depends(get_db),
@@ -830,27 +996,8 @@ def claim_device_from_form(
     if device.claimed:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Device is already claimed.")
 
-    profile = db.query(DeviceProfile).filter(DeviceProfile.id == device_profile_id).first()
-    if not profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device profile not found.")
-
-    scope_slug = _scope_slug(scope)
-    if scope_slug == "personal":
-        target_scope_type = ScopeType.Personal
-        target_scope_id = user.id
-    else:
-        team = None
-        for t in db.query(Team).all():
-            if _scope_slug(t.name) == scope_slug:
-                team = t
-                break
-        if not team:
-            raise HTTPException(status_code=400, detail="Unknown scope.")
-        target_scope_type = ScopeType.Team
-        target_scope_id = team.id
-
-    allowed_scopes = get_current_user_scopes(user=user)
-    if user.role != UserRole.Admin and (target_scope_type, target_scope_id) not in allowed_scopes:
+    target_scope_type, target_scope_id, _ = _resolve_scope_selection(scope, user, db)
+    if not _has_scope_access(user, target_scope_type, target_scope_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to claim hardware into this scope.",
@@ -859,22 +1006,66 @@ def claim_device_from_form(
     device.claimed = True
     device.scope_type = target_scope_type
     device.scope_id = target_scope_id
-    device.device_profile_id = profile.id
+    device.device_profile_id = None
     device.secret = secrets.token_urlsafe(32)
-
-    parsed_labels = [l.strip().lower() for l in labels.split(",") if l.strip()]
-    if parsed_labels:
-        existing = db.query(Label).filter(Label.name.in_(parsed_labels)).all()
-        existing_names = {lbl.name for lbl in existing}
-        for name in parsed_labels:
-            if name not in existing_names:
-                lbl = Label(name=name, color="#3b82f6")
-                db.add(lbl)
-                existing.append(lbl)
-        device.labels = existing
+    _upsert_labels_for_device(device, labels, db)
 
     db.commit()
     return RedirectResponse(url="/dashboard?tab=onboard", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.post("/api/fleet/devices/{mac}/update")
+def update_fleet_device(
+    mac: str,
+    request: Request,
+    scope: str = Form(...),
+    labels: str = Form(""),
+    device_profile_id: Optional[str] = Form(None),
+    firmware_override_id: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ = request
+    device = db.query(Device).filter(Device.mac_address == mac).first()
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found.")
+    if not device.claimed:
+        raise HTTPException(status_code=400, detail="Cannot manage an unclaimed device.")
+
+    if not _can_manage_device(current_user, device):
+        raise HTTPException(status_code=403, detail="You do not have permission to manage this device.")
+
+    target_scope_type, target_scope_id, _ = _resolve_scope_selection(scope, current_user, db)
+    if not _has_scope_access(current_user, target_scope_type, target_scope_id):
+        raise HTTPException(status_code=403, detail="You do not have permission to assign this scope.")
+
+    parsed_profile_id = _parse_optional_int(device_profile_id, "device_profile_id")
+    parsed_override_id = _parse_optional_int(firmware_override_id, "firmware_override_id")
+
+    profile = None
+    if parsed_profile_id is not None:
+        profile = db.query(DeviceProfile).filter(DeviceProfile.id == parsed_profile_id).first()
+        if not profile:
+            raise HTTPException(status_code=404, detail="Device profile not found.")
+
+    release = None
+    if parsed_override_id is not None:
+        release = db.query(FirmwareRelease).filter(FirmwareRelease.id == parsed_override_id).first()
+        if not release:
+            raise HTTPException(status_code=404, detail="Firmware release not found.")
+
+    effective_profile_id = parsed_profile_id if parsed_profile_id is not None else device.device_profile_id
+    if release and effective_profile_id and release.device_profile_id != effective_profile_id:
+        raise HTTPException(status_code=400, detail="Firmware profile mismatch for device.")
+
+    device.scope_type = target_scope_type
+    device.scope_id = target_scope_id
+    device.device_profile_id = parsed_profile_id
+    device.firmware_override_id = parsed_override_id
+    _upsert_labels_for_device(device, labels, db)
+
+    db.commit()
+    return RedirectResponse(url="/dashboard?tab=fleet", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.post("/admin/deploy")
@@ -896,30 +1087,6 @@ def deploy_firmware_to_group(
     group.target_release_id = release.id
     db.commit()
     return RedirectResponse(url="/dashboard?tab=deploy", status_code=status.HTTP_303_SEE_OTHER)
-
-
-@app.post("/api/fleet/override/{mac}")
-def override_device_firmware(
-    mac: str,
-    firmware_id: int = Form(...),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin_user),
-):
-    _ = current_user
-    device = db.query(Device).filter(Device.mac_address == mac).first()
-    if not device:
-        raise HTTPException(status_code=404, detail="Device not found.")
-
-    release = db.query(FirmwareRelease).filter(FirmwareRelease.id == firmware_id).first()
-    if not release:
-        raise HTTPException(status_code=404, detail="Firmware release not found.")
-
-    if device.device_profile_id and release.device_profile_id != device.device_profile_id:
-        raise HTTPException(status_code=400, detail="Firmware profile mismatch for device.")
-
-    device.firmware_override_id = release.id
-    db.commit()
-    return RedirectResponse(url="/dashboard?tab=fleet", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.post("/api/fleet/unclaim/{mac}")
