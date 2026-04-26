@@ -13,7 +13,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from packaging.version import parse as parse_version
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from starlette.middleware.sessions import SessionMiddleware
 from models import Base, User, Team, APIKey, Device, Firmware, Label, UserRole, ScopeType, DeviceProfile, FirmwareRelease, ApplicationGroup, AllowedEmail, AllowedDomain
 from auth import (
@@ -69,6 +69,40 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base.metadata.create_all(bind=engine)
+
+
+def _migrate_legacy_sqlite_schema() -> None:
+    """
+    Backfill columns expected by current ORM models for existing SQLite deployments.
+    SQLAlchemy create_all() does not ALTER existing tables, so persisted DBs from
+    older app versions can miss newer columns and cause runtime 500s.
+    """
+    with engine.begin() as conn:
+        table_info = conn.execute(text("PRAGMA table_info(devices)"))
+        existing_columns = {row[1] for row in table_info.fetchall()}
+
+        # Only additive, idempotent migrations to keep startup safe in production.
+        if "nickname" not in existing_columns:
+            conn.execute(text("ALTER TABLE devices ADD COLUMN nickname VARCHAR"))
+        if "battery" not in existing_columns:
+            conn.execute(text("ALTER TABLE devices ADD COLUMN battery INTEGER"))
+        if "last_ota_status" not in existing_columns:
+            conn.execute(text("ALTER TABLE devices ADD COLUMN last_ota_status VARCHAR"))
+        if "claimed" not in existing_columns:
+            conn.execute(text("ALTER TABLE devices ADD COLUMN claimed BOOLEAN NOT NULL DEFAULT 0"))
+        if "scope_id" not in existing_columns:
+            conn.execute(text("ALTER TABLE devices ADD COLUMN scope_id INTEGER"))
+        if "scope_type" not in existing_columns:
+            conn.execute(text("ALTER TABLE devices ADD COLUMN scope_type VARCHAR(8)"))
+        if "device_profile_id" not in existing_columns:
+            conn.execute(text("ALTER TABLE devices ADD COLUMN device_profile_id INTEGER"))
+        if "application_group_id" not in existing_columns:
+            conn.execute(text("ALTER TABLE devices ADD COLUMN application_group_id INTEGER"))
+        if "firmware_override_id" not in existing_columns:
+            conn.execute(text("ALTER TABLE devices ADD COLUMN firmware_override_id INTEGER"))
+
+
+_migrate_legacy_sqlite_schema()
 
 # =============================================================================
 # Access Allowlist: Bootstrap from Env Var on First Run
