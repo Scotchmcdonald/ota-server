@@ -42,7 +42,7 @@
                     <button class="tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-sky-400 bg-slate-700/50 shadow" data-target="tab-onboard">Onboard</button>
                     <button class="tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-700/30" data-target="tab-deploy">Deploy</button>
                     <button class="tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-700/30" data-target="tab-fleet">Fleet</button>
-                    {% if user and user.role == 'Admin' %}
+                    {% if db_user and db_user.role.value == 'Admin' %}
                     <button class="tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-rose-400 hover:text-rose-200 hover:bg-slate-700/30" data-target="tab-admin">Admin</button>
                     <button class="tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-amber-400 hover:text-amber-200 hover:bg-slate-700/30" data-target="tab-access">Access</button>
                     {% endif %}
@@ -55,7 +55,7 @@
                 <div class="flex items-center gap-3 bg-slate-800/80 border border-slate-700 rounded-lg px-3 py-1.5 shadow-inner">
                     <div class="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)] animate-pulse"></div>
                     <span class="text-slate-300 text-xs font-mono tracking-wide">{{ user.email if user else 'Operator' }}</span>
-                    {% if user and user.role == 'Admin' %}
+                    {% if db_user and db_user.role.value == 'Admin' %}
                         <span class="text-[9px] font-bold uppercase bg-rose-900/50 text-rose-400 px-1.5 py-0.5 rounded border border-rose-800/50">Admin</span>
                     {% endif %}
                     <a href="/logout" class="ml-2 text-[10px] font-bold tracking-wider uppercase text-slate-400 hover:text-rose-400 transition-colors">Log Out</a>
@@ -68,7 +68,7 @@
             <button class="tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-sky-400 bg-slate-700/50 shadow" data-target="tab-onboard">Onboard</button>
             <button class="tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-slate-400 bg-slate-800/50" data-target="tab-deploy">Deploy</button>
             <button class="tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-slate-400 bg-slate-800/50" data-target="tab-fleet">Fleet</button>
-            {% if user and user.role == 'Admin' %}
+            {% if db_user and db_user.role.value == 'Admin' %}
             <button class="tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-rose-400 bg-slate-800/50" data-target="tab-admin">Admin</button>
             <button class="tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-amber-400 bg-slate-800/50" data-target="tab-access">Access</button>
             {% endif %}
@@ -144,7 +144,7 @@
                         <option value="stable">Stable</option>
                         <option value="beta">Beta</option>
                     </select>
-                    {% if user and user.role == 'Admin' %}
+                    {% if db_user and db_user.role.value == 'Admin' %}
                     <button type="button" onclick="openUploadModal()" class="px-4 py-1.5 text-xs font-bold tracking-widest uppercase rounded bg-sky-600/20 text-sky-300 border border-sky-500/60 hover:bg-sky-500 hover:text-white hover:shadow-[0_0_15px_rgba(14,165,233,0.35)] transition-all">
                         Upload Payload
                     </button>
@@ -268,7 +268,7 @@
         </section>
 
         <!-- ---------------- TAB 4: ADMIN ---------------- -->
-        {% if user and user.role == 'Admin' %}
+        {% if db_user and db_user.role.value == 'Admin' %}
         <section id="tab-admin" class="tab-content space-y-6">
             <div class="border-b border-rose-900/50 pb-4">
                 <h2 class="text-2xl font-light text-rose-100 flex items-center gap-3">
@@ -336,7 +336,7 @@
         {% endif %}
 
         <!-- ---------------- TAB 5: ACCESS ---------------- -->
-        {% if user and user.role == 'Admin' %}
+        {% if db_user and db_user.role.value == 'Admin' %}
         <section id="tab-access" class="tab-content space-y-6">
             <div class="border-b border-amber-900/50 pb-4">
                 <h2 class="text-2xl font-light text-amber-100 flex items-center gap-3">

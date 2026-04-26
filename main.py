@@ -307,6 +307,11 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
 
     user_info = get_current_user_from_db(request, db)
 
+    # Keep session role in sync with the DB in case roles were reconciled
+    # during startup or by later admin operations.
+    session_user["role"] = user_info.role.value
+    request.session["user"] = session_user
+
     if user_info.role == UserRole.Admin:
         devices          = db.query(Device).all()
         firmware_releases = db.query(FirmwareRelease).order_by(FirmwareRelease.id.desc()).all()
