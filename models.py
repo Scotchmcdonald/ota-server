@@ -70,6 +70,7 @@ class APIKey(Base):
     __tablename__ = "api_keys"
     id = Column(Integer, primary_key=True, index=True)
     key_hash = Column(String, nullable=False, index=True)
+    key_suffix = Column(String(8), nullable=True)
     label = Column(String, nullable=True)
     # Legacy compatibility: some deployed DBs still enforce owner_id NOT NULL.
     owner_id = Column(Integer, nullable=True, index=True)

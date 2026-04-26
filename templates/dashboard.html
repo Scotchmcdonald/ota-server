@@ -446,7 +446,16 @@
                 {% if new_key %}
                 <div class="mb-4 p-3 rounded border border-emerald-700/60 bg-emerald-950/30">
                     <p class="text-[10px] uppercase font-bold tracking-wider text-emerald-300 mb-1">Copy now (shown once)</p>
-                    <p class="text-xs font-mono text-emerald-200 break-all">{{ new_key }}</p>
+                    <p id="new-token-value" class="text-xs font-mono text-emerald-200 break-all">{{ new_key }}</p>
+                    <div class="mt-2">
+                        <button
+                            type="button"
+                            onclick="copyTextToClipboard('{{ new_key }}')"
+                            class="text-[10px] font-bold tracking-wider uppercase text-emerald-300 hover:text-white border border-emerald-700/60 bg-emerald-900/30 hover:bg-emerald-600 px-2 py-1 rounded transition-all"
+                        >
+                            Copy PAT
+                        </button>
+                    </div>
                 </div>
                 {% endif %}
 
@@ -464,7 +473,7 @@
                     <div class="flex items-center justify-between bg-slate-800/60 border border-slate-700/60 rounded px-3 py-2">
                         <div>
                             <p class="text-[10px] font-mono text-slate-300">{{ token.label or ('Token #' ~ token.id) }}</p>
-                            <p class="text-[9px] font-mono text-slate-500">ID #{{ token.id }} - Created {{ token.created_at }}</p>
+                            <p class="text-[9px] font-mono text-slate-500">ID #{{ token.id }} - Suffix ...{{ token.key_suffix or 'unknown' }} - Created {{ token.created_at }}</p>
                         </div>
                         <form action="/api/tokens/revoke/{{ token.id }}" method="POST" data-confirm="Revoke this token?" data-success-redirect="/dashboard?tab=tokens">
                             <button type="submit" class="text-[9px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Revoke</button>
@@ -567,7 +576,7 @@
                             <tbody class="divide-y divide-slate-800/50 bg-slate-900/20">
                                 {% for token in admin_api_tokens %}
                                 <tr class="hover:bg-slate-800/40 transition-colors">
-                                    <td class="px-3 py-2 font-mono text-fuchsia-300">Token #{{ token.id }}</td>
+                                    <td class="px-3 py-2 font-mono text-fuchsia-300">Token #{{ token.id }} <span class="text-slate-500">(...{{ token.key_suffix or 'unknown' }})</span></td>
                                     <td class="px-3 py-2 font-mono text-slate-300">{{ token.user.email if token.user else 'Unknown User' }}</td>
                                     <td class="px-3 py-2 text-slate-400">{{ token.label or 'N/A' }}</td>
                                     <td class="px-3 py-2 font-mono text-slate-400">{{ token.last_used_at if token.last_used_at else 'Never' }}</td>
@@ -953,6 +962,20 @@
                 return 'Admin access required for this action.';
             }
             return message;
+        }
+
+        async function copyTextToClipboard(value) {
+            const text = String(value || '');
+            if (!text) {
+                showToast('Nothing to copy.', 'error');
+                return;
+            }
+            try {
+                await navigator.clipboard.writeText(text);
+                showToast('PAT copied to clipboard.', 'success');
+            } catch (_) {
+                showToast('Clipboard copy failed.', 'error');
+            }
         }
 
         async function submitAdminGuardForm(form) {

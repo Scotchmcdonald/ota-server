@@ -110,6 +110,9 @@ def _migrate_legacy_sqlite_schema() -> None:
         if "owner_id" not in api_key_columns:
             conn.execute(text("ALTER TABLE api_keys ADD COLUMN owner_id INTEGER"))
 
+        if "key_suffix" not in api_key_columns:
+            conn.execute(text("ALTER TABLE api_keys ADD COLUMN key_suffix VARCHAR(8)"))
+
         if "last_used_at" not in api_key_columns:
             conn.execute(text("ALTER TABLE api_keys ADD COLUMN last_used_at DATETIME"))
 
@@ -728,10 +731,16 @@ def generate_key(
     """
     raw_key = secrets.token_urlsafe(32)
 
+    if label is not None and label != "" and not label.strip():
+        raise HTTPException(status_code=400, detail="Token note cannot be whitespace only.")
+    if label is not None and len(label) > 120:
+        raise HTTPException(status_code=400, detail="Token note cannot exceed 120 characters.")
+
     token_label = (label or "").strip() or f"Generated {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC"
 
     db.add(APIKey(
         key_hash=hash_api_key(raw_key),
+        key_suffix=raw_key[-8:],
         label=token_label,
         owner_id=current_user.id,
         user_id=current_user.id,
