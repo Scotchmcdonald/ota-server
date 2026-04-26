@@ -475,14 +475,24 @@
 
                 <div class="space-y-2 max-h-56 overflow-y-auto pr-1">
                     {% for token in api_tokens %}
+                    {% set token_hint = token.key_suffix or ('h:' ~ token.key_hash[-8:]) %}
                     <div class="flex items-center justify-between bg-slate-800/60 border border-slate-700/60 rounded px-3 py-2">
                         <div>
                             <p class="text-[10px] font-mono text-slate-300">{{ token.label or ('Token #' ~ token.id) }}</p>
-                            <p class="text-[9px] font-mono text-slate-500">ID #{{ token.id }} - Suffix ...{{ token.key_suffix or 'unknown' }} - Created {{ token.created_at }}</p>
+                            <p class="text-[9px] font-mono text-slate-500">ID #{{ token.id }} - Preview ...{{ token_hint }} - Created {{ token.created_at }}</p>
                         </div>
-                        <form action="/api/tokens/revoke/{{ token.id }}" method="POST" data-confirm="Revoke this token?" data-success-redirect="/dashboard?tab=tokens">
-                            <button type="submit" class="text-[9px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Revoke</button>
-                        </form>
+                        <div class="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onclick="copyTextToClipboard('{{ token_hint }}')"
+                                class="text-[9px] font-bold tracking-wider uppercase text-sky-300 hover:text-white border border-sky-900/50 bg-sky-950/30 hover:bg-sky-600 px-2 py-1 rounded transition-all"
+                            >
+                                Copy Preview
+                            </button>
+                            <form action="/api/tokens/revoke/{{ token.id }}" method="POST" data-confirm="Revoke this token?" data-success-redirect="/dashboard?tab=tokens">
+                                <button type="submit" class="text-[9px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Revoke</button>
+                            </form>
+                        </div>
                     </div>
                     {% else %}
                     <p class="text-xs text-slate-600 font-mono py-3 text-center">No personal access tokens available.</p>
@@ -580,15 +590,25 @@
                             </thead>
                             <tbody class="divide-y divide-slate-800/50 bg-slate-900/20">
                                 {% for token in admin_api_tokens %}
+                                {% set token_hint = token.key_suffix or ('h:' ~ token.key_hash[-8:]) %}
                                 <tr class="hover:bg-slate-800/40 transition-colors">
-                                    <td class="px-3 py-2 font-mono text-fuchsia-300">Token #{{ token.id }} <span class="text-slate-500">(...{{ token.key_suffix or 'unknown' }})</span></td>
+                                    <td class="px-3 py-2 font-mono text-fuchsia-300">Token #{{ token.id }} <span class="text-slate-500">(...{{ token_hint }})</span></td>
                                     <td class="px-3 py-2 font-mono text-slate-300">{{ token.user.email if token.user else 'Unknown User' }}</td>
                                     <td class="px-3 py-2 text-slate-400">{{ token.label or 'N/A' }}</td>
                                     <td class="px-3 py-2 font-mono text-slate-400">{{ token.last_used_at if token.last_used_at else 'Never' }}</td>
                                     <td class="px-3 py-2 text-right">
-                                        <form action="/api/tokens/revoke/{{ token.id }}" method="POST" class="inline admin-guard-form" data-confirm="Revoke Token #{{ token.id }} for {{ token.user.email if token.user else 'unknown user' }}?" data-success-redirect="/dashboard?tab=access">
-                                            <button type="submit" class="text-[9px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Revoke</button>
-                                        </form>
+                                        <div class="inline-flex items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onclick="copyTextToClipboard('{{ token_hint }}')"
+                                                class="text-[9px] font-bold tracking-wider uppercase text-sky-300 hover:text-white border border-sky-900/50 bg-sky-950/30 hover:bg-sky-600 px-2 py-1 rounded transition-all"
+                                            >
+                                                Copy Preview
+                                            </button>
+                                            <form action="/api/tokens/revoke/{{ token.id }}" method="POST" class="inline admin-guard-form" data-confirm="Revoke Token #{{ token.id }} for {{ token.user.email if token.user else 'unknown user' }}?" data-success-redirect="/dashboard?tab=access">
+                                                <button type="submit" class="text-[9px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Revoke</button>
+                                            </form>
+                                        </div>
                                     </td>
                                 </tr>
                                 {% else %}
