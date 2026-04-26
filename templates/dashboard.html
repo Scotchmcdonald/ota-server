@@ -254,7 +254,7 @@
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-right">
                                 <div class="flex items-center justify-end gap-2">
-                                    <form action="/api/fleet/unclaim/{{ node.mac }}" method="POST" onsubmit="return confirm('Unclaim {{ node.mac }}?');">
+                                    <form action="/api/fleet/unclaim/{{ node.mac }}" method="POST" class="admin-guard-form" data-confirm="Unclaim {{ node.mac }}?" data-success-redirect="/dashboard?tab=fleet">
                                         <button type="submit" class="px-2.5 py-1 text-[9px] font-bold tracking-widest uppercase rounded bg-rose-900/40 text-rose-400 border border-rose-700/50 hover:bg-rose-600 hover:text-white transition-all">Unclaim</button>
                                     </form>
                                     <button type="button" onclick="overrideFirmware('{{ node.mac }}')" class="px-2.5 py-1 text-[9px] font-bold tracking-widest uppercase rounded bg-amber-900/40 text-amber-400 border border-amber-700/50 hover:bg-amber-600 hover:text-white transition-all">Override FW</button>
@@ -282,7 +282,7 @@
                 <!-- Create Teams -->
                 <div class="glass-panel p-6 rounded-xl border-t border-t-rose-500/30">
                     <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest mb-4 border-b border-slate-700/50 pb-2">Org Structure</h3>
-                    <form action="/admin/teams/add" method="POST" class="space-y-4">
+                    <form action="/admin/teams/add" method="POST" class="space-y-4 admin-guard-form" data-success-redirect="/dashboard?tab=admin">
                         <div>
                             <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">New Team Name</label>
                             <input type="text" name="team_name" placeholder="Engineering Beta" required class="w-full bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-rose-500 focus:border-rose-500 text-slate-200">
@@ -292,7 +292,7 @@
 
                     <div class="mt-8">
                         <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Assign User to Team</h4>
-                        <form action="/admin/teams/assign" method="POST" class="flex gap-2">
+                        <form action="/admin/teams/assign" method="POST" class="flex gap-2 admin-guard-form" data-success-redirect="/dashboard?tab=admin">
                             <input type="email" name="email" placeholder="user@domain.com" required class="flex-1 bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-rose-500 text-slate-200">
                             <select name="team_name" class="bg-slate-800 text-slate-300 text-xs rounded-md border border-slate-700 px-2 outline-none">
                                 <option>Team Alpha</option>
@@ -308,7 +308,7 @@
                     <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest mb-4 border-b border-slate-700/50 pb-2">Global API Keys</h3>
                     <p class="text-[10px] text-slate-500 font-mono mb-4">Keys generated here inherit Admin capabilities.</p>
                     
-                    <form action="/admin/tokens/generate" method="POST" class="mb-4">
+                    <form action="/admin/tokens/generate" method="POST" class="mb-4 admin-guard-form" data-success-redirect="/dashboard?tab=admin">
                         <button type="submit" class="w-full flex items-center justify-center gap-2 rounded p-2.5 text-xs font-bold tracking-widest uppercase text-white bg-fuchsia-700/80 hover:bg-fuchsia-600 shadow-[0_0_15px_rgba(192,38,211,0.3)] transition-all">
                             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"></path></svg>
                             Generate Root Token
@@ -322,7 +322,7 @@
                                 <p class="text-[10px] font-mono text-slate-300">{{ token.name }}</p>
                                 <p class="text-[9px] font-mono text-slate-500">ID #{{ token.id }} - {{ token.preview }}</p>
                             </div>
-                            <form action="/admin/tokens/revoke/{{ token.id }}" method="POST" onsubmit="return confirm('Revoke this token?');">
+                            <form action="/admin/tokens/revoke/{{ token.id }}" method="POST" class="admin-guard-form" data-confirm="Revoke this token?" data-success-redirect="/dashboard?tab=admin">
                                 <button type="submit" class="text-[9px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Revoke</button>
                             </form>
                         </div>
@@ -352,7 +352,7 @@
                 <div class="glass-panel p-6 rounded-xl border-t border-t-amber-500/30 space-y-4">
                     <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest border-b border-slate-700/50 pb-2">Permitted Email Addresses</h3>
 
-                    <form action="/admin/access/emails/add" method="POST" class="flex gap-2 flex-wrap">
+                    <form action="/admin/access/emails/add" method="POST" class="flex gap-2 flex-wrap admin-guard-form" data-success-redirect="/dashboard?tab=access">
                         <input type="email" name="email" placeholder="operator@company.com" required
                             class="flex-1 min-w-0 bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-slate-200 placeholder-slate-500 outline-none">
                         <input type="text" name="note" placeholder="Note (optional)"
@@ -367,7 +367,7 @@
                                 <p class="text-xs font-mono text-amber-300 truncate">{{ entry.email }}</p>
                                 {% if entry.note %}<p class="text-[10px] text-slate-500 truncate">{{ entry.note }}</p>{% endif %}
                             </div>
-                            <form action="/admin/access/emails/delete/{{ entry.id }}" method="POST" class="shrink-0">
+                            <form action="/admin/access/emails/delete/{{ entry.id }}" method="POST" class="shrink-0 admin-guard-form" data-success-redirect="/dashboard?tab=access">
                                 <button type="submit" class="text-[9px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Remove</button>
                             </form>
                         </div>
@@ -382,7 +382,7 @@
                     <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest border-b border-slate-700/50 pb-2">Permitted Domains (Wildcard)</h3>
                     <p class="text-[10px] text-slate-500 font-mono">Any <span class="text-sky-400">@domain</span> match grants access. Use carefully.</p>
 
-                    <form action="/admin/access/domains/add" method="POST" class="flex gap-2 flex-wrap">
+                    <form action="/admin/access/domains/add" method="POST" class="flex gap-2 flex-wrap admin-guard-form" data-success-redirect="/dashboard?tab=access">
                         <input type="text" name="domain" placeholder="borealtek.ca" required
                             class="flex-1 min-w-0 bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-sky-500 focus:border-sky-500 text-slate-200 placeholder-slate-500 outline-none">
                         <input type="text" name="note" placeholder="Note (optional)"
@@ -397,7 +397,7 @@
                                 <p class="text-xs font-mono text-sky-300 truncate">@{{ entry.domain }}</p>
                                 {% if entry.note %}<p class="text-[10px] text-slate-500 truncate">{{ entry.note }}</p>{% endif %}
                             </div>
-                            <form action="/admin/access/domains/delete/{{ entry.id }}" method="POST" class="shrink-0">
+                            <form action="/admin/access/domains/delete/{{ entry.id }}" method="POST" class="shrink-0 admin-guard-form" data-success-redirect="/dashboard?tab=access">
                                 <button type="submit" class="text-[9px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Remove</button>
                             </form>
                         </div>
@@ -533,7 +533,7 @@
                 </button>
             </div>
 
-            <form action="/admin/deploy" method="POST" id="distribute-form" class="space-y-5">
+            <form action="/admin/deploy" method="POST" id="distribute-form" class="space-y-5 admin-guard-form" data-success-redirect="/dashboard?tab=deploy">
                 <input type="hidden" id="distribute-firmware-id" name="firmware_id" value="">
 
                 <div>
@@ -698,6 +698,89 @@
                 setTimeout(() => toast.remove(), 200);
             }, 2600);
         }
+
+        function getErrorMessage(payload, fallback = 'Request failed.') {
+            if (!payload) return fallback;
+            if (typeof payload.detail === 'string' && payload.detail.trim()) return payload.detail;
+            if (typeof payload.message === 'string' && payload.message.trim()) return payload.message;
+            return fallback;
+        }
+
+        function normalizeAdminDeniedMessage(message) {
+            const raw = String(message || '').toLowerCase();
+            if (raw.includes('admin') && (raw.includes('only') || raw.includes('required') || raw.includes('privilege'))) {
+                return 'Admin access required for this action.';
+            }
+            return message;
+        }
+
+        async function submitAdminGuardForm(form) {
+            const confirmMessage = form.dataset.confirm;
+            if (confirmMessage && !window.confirm(confirmMessage)) {
+                return;
+            }
+
+            const submitBtn = form.querySelector('button[type="submit"]');
+            const originalLabel = submitBtn ? submitBtn.textContent : '';
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.classList.add('opacity-60', 'cursor-not-allowed');
+            }
+
+            try {
+                const response = await fetch(form.action, {
+                    method: (form.method || 'POST').toUpperCase(),
+                    body: new FormData(form),
+                    credentials: 'same-origin',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+
+                let payload = null;
+                try {
+                    payload = await response.json();
+                } catch (_) {
+                    payload = null;
+                }
+
+                if (!response.ok) {
+                    let msg = getErrorMessage(payload, 'Action failed.');
+                    if (response.status === 403) {
+                        msg = normalizeAdminDeniedMessage(msg);
+                    }
+                    showToast(msg, 'error');
+                    return;
+                }
+
+                const successRedirect = form.dataset.successRedirect;
+                if (successRedirect) {
+                    window.location.href = successRedirect;
+                    return;
+                }
+                showToast('Action completed.', 'success');
+            } catch (_) {
+                showToast('Network error. Please try again.', 'error');
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+                    submitBtn.textContent = originalLabel;
+                }
+            }
+        }
+
+        function initAdminGuardForms() {
+            const forms = document.querySelectorAll('form.admin-guard-form');
+            forms.forEach((form) => {
+                form.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    await submitAdminGuardForm(form);
+                });
+            });
+        }
+
+        initAdminGuardForms();
 
         function openClaimModal(mac) {
             if (claimMacInput) claimMacInput.value = mac;
@@ -870,19 +953,40 @@
                 showToast('Firmware ID cannot be empty.', 'error');
                 return;
             }
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = `/api/fleet/override/${mac}`;
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'firmware_id';
-            input.value = firmwareId.trim();
-            form.appendChild(input);
-            document.body.appendChild(form);
             try {
-                form.submit();
-            } finally {
-                document.body.removeChild(form);
+                const body = new FormData();
+                body.append('firmware_id', firmwareId.trim());
+
+                fetch(`/api/fleet/override/${mac}`, {
+                    method: 'POST',
+                    body,
+                    credentials: 'same-origin',
+                    headers: { 'Accept': 'application/json' },
+                }).then(async (response) => {
+                    let payload = null;
+                    try {
+                        payload = await response.json();
+                    } catch (_) {
+                        payload = null;
+                    }
+
+                    if (!response.ok) {
+                        let msg = getErrorMessage(payload, 'Override failed.');
+                        if (response.status === 403) {
+                            msg = normalizeAdminDeniedMessage(msg);
+                        }
+                        throw new Error(msg);
+                    }
+
+                    showToast('Firmware override applied.', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/dashboard?tab=fleet';
+                    }, 450);
+                }).catch((err) => {
+                    showToast(err?.message || 'Override failed.', 'error');
+                });
+            } catch (_) {
+                showToast('Override failed.', 'error');
             }
         }
 

@@ -109,9 +109,12 @@ _migrate_legacy_sqlite_schema()
 # =============================================================================
 def _seed_allowlist_from_env():
     """
-    On startup, inject any emails from the ADMIN_EMAILS env var into the DB
-    if they are not already present. This bootstraps the first deployment so
-    the admin can log in and manage the list from the UI thereafter.
+    On startup:
+    1) inject any emails from ADMIN_EMAILS into the allowlist table, and
+    2) reconcile existing users so listed emails are Admin.
+
+    This prevents role drift when ADMIN_EMAILS changes after users were
+    already created in earlier deployments.
     """
     if not ADMIN_EMAILS:
         return
@@ -120,6 +123,9 @@ def _seed_allowlist_from_env():
         for email in ADMIN_EMAILS:
             if not db.query(AllowedEmail).filter(AllowedEmail.email == email).first():
                 db.add(AllowedEmail(email=email, note="Seeded from ADMIN_EMAILS env var"))
+            user = db.query(User).filter(User.email == email).first()
+            if user and user.role != UserRole.Admin:
+                user.role = UserRole.Admin
         db.commit()
     finally:
         db.close()
