@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -26,14 +26,14 @@
 </head>
 <body class="antialiased min-h-screen font-sans flex flex-col selection:bg-sky-500/30">
 
-    <!-- ═══════════════════════════ NAVBAR ═══════════════════════════ -->
+    <!-- --------------------------- NAVBAR --------------------------- -->
     <nav class="bg-slate-900/90 backdrop-blur border-b border-slate-800 p-4 sticky top-0 z-50 shadow-2xl">
         <div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
             <div class="flex items-center space-x-3">
                 <svg class="w-8 h-8 text-sky-500 shrink-0 drop-shadow-[0_0_8px_rgba(14,165,233,0.8)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"></path>
                 </svg>
-                <h1 class="text-2xl font-bold tracking-widest text-slate-100 header-glow uppercase">FLIGHT // DECK</h1>
+                <h1 class="text-2xl font-bold tracking-widest text-slate-100 header-glow uppercase">ESP FLEET</h1>
             </div>
             
             <div class="flex items-center gap-6">
@@ -75,10 +75,10 @@
         </div>
     </nav>
 
-    <!-- ══════════════════════════ MAIN CONTENT ═══════════════════════ -->
+    <!-- -------------------------- MAIN CONTENT ----------------------- -->
     <main class="flex-grow max-w-7xl mx-auto w-full p-4 sm:p-6 mt-2">
 
-        <!-- ──────────────── TAB 1: ONBOARD ──────────────── -->
+        <!-- ---------------- TAB 1: ONBOARD ---------------- -->
         <section id="tab-onboard" class="tab-content active space-y-6">
             <div class="flex justify-between items-end border-b border-slate-800 pb-4">
                 <div>
@@ -125,7 +125,7 @@
             </div>
         </section>
 
-        <!-- ──────────────── TAB 2: DEPLOY ──────────────── -->
+        <!-- ---------------- TAB 2: DEPLOY ---------------- -->
         <section id="tab-deploy" class="tab-content space-y-6">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-slate-800 pb-4 gap-4">
                 <div>
@@ -144,6 +144,11 @@
                         <option value="stable">Stable</option>
                         <option value="beta">Beta</option>
                     </select>
+                    {% if user and user.role == 'Admin' %}
+                    <button type="button" onclick="openUploadModal()" class="px-4 py-1.5 text-xs font-bold tracking-widest uppercase rounded bg-sky-600/20 text-sky-300 border border-sky-500/60 hover:bg-sky-500 hover:text-white hover:shadow-[0_0_15px_rgba(14,165,233,0.35)] transition-all">
+                        Upload Payload
+                    </button>
+                    {% endif %}
                 </div>
             </div>
 
@@ -170,7 +175,7 @@
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-slate-500 font-mono text-xs">{{ fw.date }}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-right">
-                                <button class="px-3 py-1.5 text-[10px] font-bold tracking-widest uppercase rounded bg-emerald-900/40 text-emerald-400 border border-emerald-700/50 hover:bg-emerald-600 hover:text-white transition-all">Distribute</button>
+                                <button onclick="openDistributeModal('{{ fw.version }}', '{{ fw.id | default('') }}')" class="px-3 py-1.5 text-[10px] font-bold tracking-widest uppercase rounded bg-emerald-900/40 text-emerald-400 border border-emerald-700/50 hover:bg-emerald-600 hover:text-white transition-all">Distribute</button>
                             </td>
                         </tr>
                         {% endfor %}
@@ -179,7 +184,7 @@
             </div>
         </section>
 
-        <!-- ──────────────── TAB 3: FLEET ──────────────── -->
+        <!-- ---------------- TAB 3: FLEET ---------------- -->
         <section id="tab-fleet" class="tab-content space-y-6">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-slate-800 pb-4 gap-4">
                 <div>
@@ -210,7 +215,8 @@
                             <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Labels</th>
                             <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Current FW</th>
                             <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Energy/VBatt</th>
-                            <th class="px-6 py-4 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Connection</th>
+                            <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Connection</th>
+                            <th class="px-6 py-4 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-800/50 bg-slate-900/20">
@@ -246,6 +252,14 @@
                                     </span>
                                 {% endif %}
                             </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right">
+                                <div class="flex items-center justify-end gap-2">
+                                    <form action="/api/fleet/unclaim/{{ node.mac }}" method="POST" onsubmit="return confirm('Unclaim {{ node.mac }}?');">
+                                        <button type="submit" class="px-2.5 py-1 text-[9px] font-bold tracking-widest uppercase rounded bg-rose-900/40 text-rose-400 border border-rose-700/50 hover:bg-rose-600 hover:text-white transition-all">Unclaim</button>
+                                    </form>
+                                    <button type="button" onclick="overrideFirmware('{{ node.mac }}')" class="px-2.5 py-1 text-[9px] font-bold tracking-widest uppercase rounded bg-amber-900/40 text-amber-400 border border-amber-700/50 hover:bg-amber-600 hover:text-white transition-all">Override FW</button>
+                                </div>
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -253,7 +267,7 @@
             </div>
         </section>
 
-        <!-- ──────────────── TAB 4: ADMIN ──────────────── -->
+        <!-- ---------------- TAB 4: ADMIN ---------------- -->
         {% if user and user.role == 'Admin' %}
         <section id="tab-admin" class="tab-content space-y-6">
             <div class="border-b border-rose-900/50 pb-4">
@@ -268,24 +282,24 @@
                 <!-- Create Teams -->
                 <div class="glass-panel p-6 rounded-xl border-t border-t-rose-500/30">
                     <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest mb-4 border-b border-slate-700/50 pb-2">Org Structure</h3>
-                    <form onsubmit="event.preventDefault(); alert('Create Team triggered');" class="space-y-4">
+                    <form action="/admin/teams/add" method="POST" class="space-y-4">
                         <div>
                             <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">New Team Name</label>
-                            <input type="text" placeholder="Engineering Beta" class="w-full bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-rose-500 focus:border-rose-500 text-slate-200">
+                            <input type="text" name="team_name" placeholder="Engineering Beta" required class="w-full bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-rose-500 focus:border-rose-500 text-slate-200">
                         </div>
                         <button type="submit" class="text-xs font-bold tracking-widest uppercase px-4 py-2 rounded bg-rose-600/80 text-white hover:bg-rose-500 transition-colors shadow-lg">Create Team</button>
                     </form>
 
                     <div class="mt-8">
                         <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Assign User to Team</h4>
-                        <div class="flex gap-2">
-                            <input type="email" placeholder="user@domain.com" class="flex-1 bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-rose-500 text-slate-200">
-                            <select class="bg-slate-800 text-slate-300 text-xs rounded-md border border-slate-700 px-2 outline-none">
+                        <form action="/admin/teams/assign" method="POST" class="flex gap-2">
+                            <input type="email" name="email" placeholder="user@domain.com" required class="flex-1 bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-rose-500 text-slate-200">
+                            <select name="team_name" class="bg-slate-800 text-slate-300 text-xs rounded-md border border-slate-700 px-2 outline-none">
                                 <option>Team Alpha</option>
                                 <option>Team Bravo</option>
                             </select>
-                            <button type="button" class="px-3 bg-slate-700 hover:bg-slate-600 text-xs font-bold uppercase rounded text-slate-200 transition-colors">Add</button>
-                        </div>
+                            <button type="submit" class="px-3 bg-slate-700 hover:bg-slate-600 text-xs font-bold uppercase rounded text-slate-200 transition-colors">Add</button>
+                        </form>
                     </div>
                 </div>
 
@@ -294,26 +308,34 @@
                     <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest mb-4 border-b border-slate-700/50 pb-2">Global API Keys</h3>
                     <p class="text-[10px] text-slate-500 font-mono mb-4">Keys generated here inherit Admin capabilities.</p>
                     
-                    <button onclick="generateAdminKey()" type="button" class="w-full flex items-center justify-center gap-2 rounded p-2.5 text-xs font-bold tracking-widest uppercase text-white bg-fuchsia-700/80 hover:bg-fuchsia-600 shadow-[0_0_15px_rgba(192,38,211,0.3)] transition-all mb-4">
-                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"></path></svg>
-                        Generate Root Token
-                    </button>
+                    <form action="/admin/tokens/generate" method="POST" class="mb-4">
+                        <button type="submit" class="w-full flex items-center justify-center gap-2 rounded p-2.5 text-xs font-bold tracking-widest uppercase text-white bg-fuchsia-700/80 hover:bg-fuchsia-600 shadow-[0_0_15px_rgba(192,38,211,0.3)] transition-all">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"></path></svg>
+                            Generate Root Token
+                        </button>
+                    </form>
 
                     <div class="space-y-2 max-h-40 overflow-y-auto pr-1">
+                        {% for token in api_tokens|default([{'id': 41, 'name': 'CI/CD Pipeline', 'preview': 'token_8f92a1...'}]) %}
                         <div class="flex items-center justify-between bg-slate-800/60 border border-slate-700/60 rounded px-3 py-2">
                             <div>
-                                <p class="text-[10px] font-mono text-slate-300">CI/CD Pipeline</p>
-                                <p class="text-[9px] font-mono text-slate-500">ID #41 · token_8f92a1...</p>
+                                <p class="text-[10px] font-mono text-slate-300">{{ token.name }}</p>
+                                <p class="text-[9px] font-mono text-slate-500">ID #{{ token.id }} - {{ token.preview }}</p>
                             </div>
-                            <button class="text-[9px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Revoke</button>
+                            <form action="/admin/tokens/revoke/{{ token.id }}" method="POST" onsubmit="return confirm('Revoke this token?');">
+                                <button type="submit" class="text-[9px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Revoke</button>
+                            </form>
                         </div>
+                        {% else %}
+                        <p class="text-xs text-slate-600 font-mono py-3 text-center">No API tokens available.</p>
+                        {% endfor %}
                     </div>
                 </div>
             </div>
         </section>
         {% endif %}
 
-        <!-- ──────────────── TAB 5: ACCESS ──────────────── -->
+        <!-- ---------------- TAB 5: ACCESS ---------------- -->
         {% if user and user.role == 'Admin' %}
         <section id="tab-access" class="tab-content space-y-6">
             <div class="border-b border-amber-900/50 pb-4">
@@ -391,7 +413,7 @@
 
     </main>
 
-    <!-- ══════════════════════════ MODALS / OVERLAYS ═══════════════════════ -->
+    <!-- -------------------------- MODALS / OVERLAYS ----------------------- -->
     
     <!-- Claim Device Modal -->
     <div id="claim-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
@@ -410,6 +432,15 @@
                 <div>
                     <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Target MAC</label>
                     <input type="text" id="claim-mac" name="mac" readonly class="w-full bg-slate-900/80 border border-slate-700 rounded py-2 px-3 text-sm font-mono text-sky-400 outline-none cursor-not-allowed">
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Device Profile</label>
+                    <select name="device_profile_id" required class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-sky-500 outline-none">
+                        {% for profile in device_profiles|default([{'id': 1, 'name': 'FeatherS3_EnvSensor'}]) %}
+                        <option value="{{ profile.id }}">{{ profile.name }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
 
                 <div>
@@ -434,10 +465,112 @@
         </div>
     </div>
 
+    <!-- Upload Firmware Modal -->
+    <div id="upload-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+        <div id="upload-modal-content" class="glass-panel p-6 rounded-xl shadow-[0_0_40px_rgba(0,0,0,0.8)] max-w-lg w-full border border-emerald-500/30 transform scale-95 opacity-0 transition-all duration-200">
+            <div class="flex justify-between items-center mb-5">
+                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-widest flex items-center gap-2">
+                    <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                    Upload Firmware Payload
+                </h3>
+                <button onclick="closeUploadModal()" type="button" class="text-slate-500 border border-slate-700 rounded hover:text-white hover:bg-rose-500 hover:border-rose-500 transition-colors p-1" title="Close">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
 
-    <!-- ══════════════════════════ SCRIPTS ═══════════════════════════ -->
+            <form id="upload-form" action="/admin/upload-firmware" method="POST" enctype="multipart/form-data" class="space-y-5">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Firmware Binary (.bin)</label>
+                    <input type="file" name="file" accept=".bin" required class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 file:mr-3 file:rounded file:border-0 file:bg-emerald-600/80 file:px-3 file:py-1 file:text-xs file:font-bold file:text-white hover:file:bg-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Version String</label>
+                    <input type="text" name="version_string" placeholder="2026.04.26+fleet.1" required class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-emerald-500 outline-none placeholder-slate-500">
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Hardware Profile</label>
+                    <select name="device_profile_id" required class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-emerald-500 outline-none">
+                        {% for profile in device_profiles|default([{'id': 1, 'name': 'FeatherS3_EnvSensor'}]) %}
+                        <option value="{{ profile.id }}">{{ profile.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Visibility Scope</label>
+                    <select name="scope" required class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-emerald-500 outline-none">
+                        <option value="personal">Personal</option>
+                        <option value="team-alpha">Team Alpha</option>
+                        <option value="team-bravo">Team Bravo</option>
+                    </select>
+                </div>
+
+                <label class="flex items-center gap-2 text-xs text-slate-300">
+                    <input type="checkbox" name="set_as_latest" value="true" class="h-4 w-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500">
+                    Set as latest for auto-deploy
+                </label>
+
+                <div class="pt-2 flex gap-3">
+                    <button type="button" onclick="closeUploadModal()" class="flex-1 py-2.5 text-xs font-bold uppercase rounded border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors">Cancel</button>
+                    <button type="submit" id="upload-submit-btn" class="flex-1 py-2.5 text-xs font-bold uppercase rounded bg-emerald-600 text-white hover:bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.35)] transition-all">Upload Payload</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Distribute Firmware Modal -->
+    <div id="distribute-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+        <div id="distribute-modal-content" class="glass-panel p-6 rounded-xl shadow-[0_0_40px_rgba(0,0,0,0.8)] max-w-md w-full border border-emerald-500/30 transform scale-95 opacity-0 transition-all duration-200">
+            <div class="flex justify-between items-center mb-5">
+                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-widest flex items-center gap-2">
+                    <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
+                    Distribute Firmware
+                </h3>
+                <button onclick="closeDistributeModal()" type="button" class="text-slate-500 border border-slate-700 rounded hover:text-white hover:bg-rose-500 hover:border-rose-500 transition-colors p-1" title="Close">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <form action="/admin/deploy" method="POST" id="distribute-form" class="space-y-5">
+                <input type="hidden" id="distribute-firmware-id" name="firmware_id" value="">
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Firmware Version</label>
+                    <input type="text" id="distribute-version" name="version" readonly
+                        class="w-full bg-slate-900/80 border border-slate-700 rounded py-2 px-3 text-sm font-mono text-emerald-400 outline-none cursor-not-allowed">
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Target Application Group</label>
+                    <select name="application_group_id" required
+                        class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-emerald-500 outline-none">
+                        {% for group in application_groups|default([
+                            {'id': 1, 'name': 'Team Alpha - Outdoor Sensors'},
+                            {'id': 2, 'name': 'Team Bravo - Indoor Climate'},
+                            {'id': 3, 'name': 'Engineering - Dev Bench'}
+                        ]) %}
+                        <option value="{{ group.id }}">{{ group.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="pt-2 flex gap-3">
+                    <button type="button" onclick="closeDistributeModal()" class="flex-1 py-2.5 text-xs font-bold uppercase rounded border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors">Cancel</button>
+                    <button type="submit" class="flex-1 py-2.5 text-xs font-bold uppercase rounded bg-emerald-600 text-white hover:bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.35)] transition-all">Confirm Deploy</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="fixed top-4 right-4 z-[120] flex flex-col gap-2 pointer-events-none"></div>
+
+
+    <!-- -------------------------- SCRIPTS --------------------------- -->
     <script>
-        // ── Clock ──────────────────────────────────────────
+        // -- Clock ------------------------------------------
         function updateTime() {
             const el = document.getElementById('clock');
             if (el) el.textContent = new Date().toISOString().replace('T', ' ').substring(0, 19) + ' Z';
@@ -445,7 +578,7 @@
         setInterval(updateTime, 1000);
         updateTime();
 
-        // ── Tab Switching ──────────────────────────────────
+        // -- Tab Switching ----------------------------------
         function getTabColor(tabTarget, isActive) {
             if (tabTarget === 'tab-admin')  return isActive ? 'text-rose-400'  : 'text-rose-400 hover:text-rose-200';
             if (tabTarget === 'tab-access') return isActive ? 'text-amber-400' : 'text-amber-400 hover:text-amber-200';
@@ -488,7 +621,7 @@
         }
         initTabs();
 
-        // ── Auto-select tab from query param (e.g. ?tab=access after redirect) ──
+        // -- Auto-select tab from query param (e.g. ?tab=access after redirect) --
         const urlParams = new URLSearchParams(window.location.search);
         const tabParam = urlParams.get('tab');
         if (tabParam) {
@@ -496,7 +629,7 @@
             if (targetBtn) targetBtn.click();
         }
 
-        // ── Table Filtering Logic ──────────────────────────
+        // -- Table Filtering Logic --------------------------
         function filterTable(tableRowsSelector, scopeFilterId, labelFilterId) {
             const scopeEl = document.getElementById(scopeFilterId);
             const labelEl = document.getElementById(labelFilterId);
@@ -530,10 +663,41 @@
         document.getElementById('fleet-label-filter')?.addEventListener('change', () => filterTable('.fleet-row', 'fleet-scope-filter', 'fleet-label-filter'));
 
 
-        // ── Claim Modal Logic ──────────────────────────────
+        // -- Claim Modal Logic ------------------------------
         const claimModal = document.getElementById('claim-modal');
         const claimModalContent = document.getElementById('claim-modal-content');
         const claimMacInput = document.getElementById('claim-mac');
+        const uploadModal = document.getElementById('upload-modal');
+        const uploadModalContent = document.getElementById('upload-modal-content');
+        const uploadForm = document.getElementById('upload-form');
+        const uploadSubmitBtn = document.getElementById('upload-submit-btn');
+        const toastContainer = document.getElementById('toast-container');
+
+        function showToast(message, type = 'info') {
+            if (!toastContainer) return;
+
+            const palette = {
+                success: 'border-emerald-500/60 bg-emerald-950/70 text-emerald-200',
+                error: 'border-rose-500/60 bg-rose-950/70 text-rose-200',
+                info: 'border-sky-500/60 bg-sky-950/70 text-sky-200',
+            };
+
+            const toast = document.createElement('div');
+            toast.className = `pointer-events-auto glass-panel border ${palette[type] || palette.info} px-4 py-2 rounded-lg text-xs font-mono tracking-wide shadow-lg opacity-0 translate-y-[-4px] transition-all duration-200`;
+            toast.textContent = message;
+            toastContainer.appendChild(toast);
+
+            requestAnimationFrame(() => {
+                toast.classList.remove('opacity-0', 'translate-y-[-4px]');
+                toast.classList.add('opacity-100', 'translate-y-0');
+            });
+
+            setTimeout(() => {
+                toast.classList.remove('opacity-100', 'translate-y-0');
+                toast.classList.add('opacity-0', 'translate-y-[-4px]');
+                setTimeout(() => toast.remove(), 200);
+            }, 2600);
+        }
 
         function openClaimModal(mac) {
             if (claimMacInput) claimMacInput.value = mac;
@@ -562,10 +726,89 @@
             }, 200);
         }
 
+        function openUploadModal() {
+            if (uploadModal) {
+                uploadModal.classList.remove('hidden');
+                uploadModal.classList.add('flex');
+            }
+            setTimeout(() => {
+                if (uploadModalContent) {
+                    uploadModalContent.classList.remove('scale-95', 'opacity-0');
+                    uploadModalContent.classList.add('scale-100', 'opacity-100');
+                }
+            }, 10);
+        }
+
+        function closeUploadModal() {
+            if (uploadModalContent) {
+                uploadModalContent.classList.remove('scale-100', 'opacity-100');
+                uploadModalContent.classList.add('scale-95', 'opacity-0');
+            }
+            setTimeout(() => {
+                if (uploadModal) {
+                    uploadModal.classList.add('hidden');
+                    uploadModal.classList.remove('flex');
+                }
+            }, 200);
+        }
+
+        uploadForm?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.currentTarget;
+            const formData = new FormData(form);
+
+            if (uploadSubmitBtn) {
+                uploadSubmitBtn.disabled = true;
+                uploadSubmitBtn.classList.add('opacity-60', 'cursor-not-allowed');
+                uploadSubmitBtn.textContent = 'Uploading...';
+            }
+
+            try {
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'same-origin',
+                });
+
+                let payload = null;
+                try {
+                    payload = await response.json();
+                } catch (_) {
+                    payload = null;
+                }
+
+                if (!response.ok) {
+                    const msg = payload?.detail || payload?.message || 'Firmware upload failed.';
+                    throw new Error(msg);
+                }
+
+                form.reset();
+                closeUploadModal();
+                showToast('Firmware uploaded. Refreshing deploy table...', 'success');
+                setTimeout(() => {
+                    window.location.href = '/dashboard?tab=deploy';
+                }, 700);
+            } catch (err) {
+                showToast(err?.message || 'Upload failed.', 'error');
+            } finally {
+                if (uploadSubmitBtn) {
+                    uploadSubmitBtn.disabled = false;
+                    uploadSubmitBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+                    uploadSubmitBtn.textContent = 'Upload Payload';
+                }
+            }
+        });
+
         // Handle Escape Key for Modal
         document.addEventListener('keydown', (e) => {
             if(e.key === 'Escape' && claimModal && !claimModal.classList.contains('hidden')) {
                 closeClaimModal();
+            }
+            if (e.key === 'Escape' && uploadModal && !uploadModal.classList.contains('hidden')) {
+                closeUploadModal();
+            }
+            if (e.key === 'Escape' && distributeModal && !distributeModal.classList.contains('hidden')) {
+                closeDistributeModal();
             }
         });
 
@@ -576,10 +819,73 @@
             }
         });
 
-        function generateAdminKey() {
-            alert('Generating new root token via API...');
+        uploadModal?.addEventListener('click', (e) => {
+            if (e.target === uploadModal) {
+                closeUploadModal();
+            }
+        });
+
+        // -- Distribute Modal Logic -------------------------
+        const distributeModal = document.getElementById('distribute-modal');
+        const distributeModalContent = document.getElementById('distribute-modal-content');
+        const distributeVersionInput = document.getElementById('distribute-version');
+        const distributeFirmwareIdInput = document.getElementById('distribute-firmware-id');
+
+        function openDistributeModal(version, id) {
+            if (distributeVersionInput) distributeVersionInput.value = version;
+            if (distributeFirmwareIdInput) distributeFirmwareIdInput.value = id;
+            if (distributeModal) {
+                distributeModal.classList.remove('hidden');
+                distributeModal.classList.add('flex');
+            }
+            setTimeout(() => {
+                if (distributeModalContent) {
+                    distributeModalContent.classList.remove('scale-95', 'opacity-0');
+                    distributeModalContent.classList.add('scale-100', 'opacity-100');
+                }
+            }, 10);
         }
-        
+
+        function closeDistributeModal() {
+            if (distributeModalContent) {
+                distributeModalContent.classList.remove('scale-100', 'opacity-100');
+                distributeModalContent.classList.add('scale-95', 'opacity-0');
+            }
+            setTimeout(() => {
+                if (distributeModal) {
+                    distributeModal.classList.add('hidden');
+                    distributeModal.classList.remove('flex');
+                }
+            }, 200);
+        }
+
+        distributeModal?.addEventListener('click', (e) => {
+            if (e.target === distributeModal) closeDistributeModal();
+        });
+
+        function overrideFirmware(mac) {
+            const firmwareId = prompt(`Enter Firmware ID to push to ${mac}:`);
+            if (firmwareId === null) return; // user cancelled
+            if (!firmwareId.trim()) {
+                showToast('Firmware ID cannot be empty.', 'error');
+                return;
+            }
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = `/api/fleet/override/${mac}`;
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'firmware_id';
+            input.value = firmwareId.trim();
+            form.appendChild(input);
+            document.body.appendChild(form);
+            try {
+                form.submit();
+            } finally {
+                document.body.removeChild(form);
+            }
+        }
+
         function refreshData(e) {
             const btn = e.currentTarget;
             const originalHtml = btn.innerHTML;

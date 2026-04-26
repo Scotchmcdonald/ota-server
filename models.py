@@ -90,6 +90,7 @@ class Device(Base):
     __tablename__ = "devices"
     id = Column(Integer, primary_key=True, index=True)
     mac_address = Column(String, unique=True, index=True, nullable=False)
+    nickname = Column(String, nullable=True)
     secret = Column(String, nullable=False)
     device_class = Column(String, index=True, nullable=False)
     version = Column(String)

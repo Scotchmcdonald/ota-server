@@ -113,6 +113,36 @@ def get_db():
     finally:
         db.close()
 
+def require_admin_user(request: Request, db: Session = Depends(get_db)) -> User:
+    user = get_current_user_from_db(request, db)
+    if user.role != UserRole.Admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Admin privileges required.",
+        )
+    return user
+
+def require_admin_actor(
+    request: Request,
+    db: Session = Depends(get_db),
+    x_admin_key: Optional[str] = Header(default=None),
+) -> User:
+    """
+    Allows either an authenticated Admin web session or an Admin-owned API key.
+    """
+    if x_admin_key:
+        key_hash = hash_api_key(x_admin_key)
+        api_key = db.query(APIKey).filter(APIKey.key_hash == key_hash).first()
+        if not api_key:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key.")
+        if api_key.owner.role != UserRole.Admin:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin API key required.")
+        return api_key.owner
+    return require_admin_user(request, db)
+
+def _scope_slug(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", (value or "").lower()).strip("-")
+
 def is_newer_version(v1: str, v2: str) -> bool:
     """Returns True if v1 is semantically newer than v2."""
     try:
@@ -197,11 +227,13 @@ async def auth_callback(request: Request, db: Session = Depends(get_db)):
 
     user = db.query(User).filter(User.email == email).first()
     if not user:
-        user = User(email=email, name=user_info.get("name", ""))
+        # Give admin role if email is in the ADMIN_EMAILS allowlist
+        role = UserRole.Admin if email in ADMIN_EMAILS else UserRole.User
+        user = User(email=email, name=user_info.get("name", ""), role=role)
         db.add(user)
         db.commit()
 
-    request.session["user"] = {"email": email, "name": user_info.get("name", "")}
+    request.session["user"] = {"email": email, "name": user_info.get("name", ""), "role": user.role.value}
     return RedirectResponse(url="/dashboard")
 
 
@@ -243,7 +275,10 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         firmware_releases = db.query(FirmwareRelease).order_by(FirmwareRelease.id.desc()).all()
 
     api_keys = user_info.api_keys
+    api_tokens = db.query(APIKey).order_by(APIKey.id.desc()).all() if user_info.role == UserRole.Admin else []
     new_key  = request.session.pop("new_key_flash", None)
+    device_profiles = db.query(DeviceProfile).order_by(DeviceProfile.name.asc()).all()
+    application_groups = db.query(ApplicationGroup).order_by(ApplicationGroup.name.asc()).all()
 
     allowed_emails  = db.query(AllowedEmail).order_by(AllowedEmail.created_at).all()  if user_info.role == UserRole.Admin else []
     allowed_domains = db.query(AllowedDomain).order_by(AllowedDomain.created_at).all() if user_info.role == UserRole.Admin else []
@@ -257,7 +292,10 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             "devices":         devices,
             "firmwares":       firmware_releases,
             "api_keys":        api_keys,
+            "api_tokens":      api_tokens,
             "new_key":         new_key,
+            "device_profiles": device_profiles,
+            "application_groups": application_groups,
             "allowed_emails":  allowed_emails,
             "allowed_domains": allowed_domains,
         },
@@ -351,14 +389,60 @@ def access_delete_domain(
     return RedirectResponse(url="/dashboard?tab=access", status_code=status.HTTP_303_SEE_OTHER)
 
 
+@app.post("/admin/teams/add")
+def admin_add_team(
+    team_name: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin_user),
+):
+    _ = current_user
+    name = team_name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Team name is required.")
+    if db.query(Team).filter(Team.name == name).first():
+        raise HTTPException(status_code=409, detail="Team already exists.")
+    db.add(Team(name=name))
+    db.commit()
+    return RedirectResponse(url="/dashboard?tab=admin", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.post("/admin/teams/assign")
+def admin_assign_team(
+    email: str = Form(...),
+    team_name: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin_user),
+):
+    _ = current_user
+    normalized_email = email.strip().lower()
+    if not normalized_email or "@" not in normalized_email:
+        raise HTTPException(status_code=400, detail="Invalid email address.")
+
+    user = db.query(User).filter(User.email == normalized_email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    team = db.query(Team).filter(Team.name == team_name.strip()).first()
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found.")
+
+    if team not in user.teams:
+        user.teams.append(team)
+        db.commit()
+
+    return RedirectResponse(url="/dashboard?tab=admin", status_code=status.HTTP_303_SEE_OTHER)
+
+
 # =============================================================================
 # API Key Management (OAuth-protected)
 # =============================================================================
 
+@app.post("/admin/tokens/generate")
 @app.post("/admin/generate-key")
 def generate_key(
     request: Request,
     db:      Session = Depends(get_db),
+    current_user: User = Depends(require_admin_user),
 ):
     """
     Generate a cryptographically secure API key for the authenticated user.
@@ -366,8 +450,6 @@ def generate_key(
     session flash and then discarded.  Uses the PRG pattern (POST → redirect
     → GET) to prevent accidental duplicate submissions.
     """
-    current_user = get_current_user_from_db(request, db)
-
     raw_key = secrets.token_urlsafe(32)
 
     db.add(APIKey(
@@ -378,28 +460,30 @@ def generate_key(
     db.commit()
 
     request.session["new_key_flash"] = raw_key
-    return RedirectResponse(url="/dashboard", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url="/dashboard?tab=admin", status_code=status.HTTP_303_SEE_OTHER)
 
 
+@app.post("/admin/tokens/revoke/{key_id}")
 @app.post("/admin/delete-key/{key_id}")
 def delete_key(
     key_id:  int,
     request: Request,
     db:      Session = Depends(get_db),
+    current_user: User = Depends(require_admin_user),
 ):
-    """Revoke an API key. The key must belong to the authenticated user."""
-    current_user = get_current_user_from_db(request, db)
+    """Revoke an API key. Admin only."""
+    _ = request
+    _ = current_user
 
     key = db.query(APIKey).filter(
         APIKey.id == key_id,
-        APIKey.owner_id == current_user.id,  # Ownership check prevents IDOR.
     ).first()
     if not key:
         raise HTTPException(status_code=404, detail="API key not found.")
 
     db.delete(key)
     db.commit()
-    return RedirectResponse(url="/dashboard", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url="/dashboard?tab=admin", status_code=status.HTTP_303_SEE_OTHER)
 
 
 # =============================================================================
@@ -408,29 +492,42 @@ def delete_key(
 
 @app.post("/admin/upload-firmware", status_code=201)
 def upload_firmware_m2m(
+    request:           Request,
     file:              UploadFile,
-    version:           str = Form(...),
+    version:           Optional[str] = Form(None),
+    version_string:    Optional[str] = Form(None),
     device_profile_id: int = Form(...),
+    scope:             str = Form(...),
+    set_as_latest:     bool = Form(False),
     db:                Session = Depends(get_db),
-    x_admin_key:       str = Header(...),
+    admin_actor:       User = Depends(require_admin_actor),
 ):
     """
-    M2M firmware upload for CI/CD pipelines. Authenticated via X-Admin-Key header.
-    Binds the binary to a DeviceProfile, preventing cross-profile deploys.
+    Firmware upload endpoint supporting:
+    - M2M CI/CD uploads via X-Admin-Key header
+    - Web dashboard uploads via authenticated session
+
+    Binds binaries to a DeviceProfile, preventing cross-profile deploys.
     """
-    key_hash = hash_api_key(x_admin_key)
-    api_key  = db.query(APIKey).filter(APIKey.key_hash == key_hash).first()
-    if not api_key:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or missing API key.")
+    _ = request
+    uploader_email = admin_actor.email
 
     if not file.filename or not file.filename.endswith(".bin"):
         raise HTTPException(status_code=400, detail="Only .bin firmware files are accepted.")
+
+    scope_slug = _scope_slug(scope)
+    if not scope_slug:
+        raise HTTPException(status_code=400, detail="Missing scope.")
 
     profile = db.query(DeviceProfile).filter(DeviceProfile.id == device_profile_id).first()
     if not profile:
         raise HTTPException(status_code=404, detail=f"DeviceProfile id={device_profile_id} not found.")
 
-    version_clean = _sanitize_field(version, allow_dots=True)
+    raw_version = version_string or version
+    if not raw_version:
+        raise HTTPException(status_code=400, detail="Missing version string.")
+
+    version_clean = _sanitize_field(raw_version, allow_dots=True)
     profile_slug  = _sanitize_field(profile.name)
     if not version_clean:
         raise HTTPException(status_code=400, detail="Invalid version string.")
@@ -459,8 +556,10 @@ def upload_firmware_m2m(
         "firmware_release_id": release.id,
         "version":             release.version,
         "device_profile":      profile.name,
+        "scope":               scope_slug,
         "filename":            filename,
-        "uploaded_by":         api_key.owner.email,
+        "uploaded_by":         uploader_email,
+        "set_as_latest":       bool(set_as_latest),
     })
 
 
@@ -663,3 +762,133 @@ def claim_device(
     db.refresh(device)
     
     return {"message": "Device claimed.", "mac_address": device.mac_address, "new_secret": device.secret}
+
+
+@app.post("/api/claim")
+def claim_device_from_form(
+    request: Request,
+    mac: str = Form(...),
+    device_profile_id: int = Form(...),
+    scope: str = Form(...),
+    labels: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    user = get_current_user_from_db(request, db)
+
+    device = db.query(Device).filter(Device.mac_address == mac).first()
+    if not device:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found.")
+    if device.claimed:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Device is already claimed.")
+
+    profile = db.query(DeviceProfile).filter(DeviceProfile.id == device_profile_id).first()
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device profile not found.")
+
+    scope_slug = _scope_slug(scope)
+    if scope_slug == "personal":
+        target_scope_type = ScopeType.Personal
+        target_scope_id = user.id
+    else:
+        team = None
+        for t in db.query(Team).all():
+            if _scope_slug(t.name) == scope_slug:
+                team = t
+                break
+        if not team:
+            raise HTTPException(status_code=400, detail="Unknown scope.")
+        target_scope_type = ScopeType.Team
+        target_scope_id = team.id
+
+    allowed_scopes = get_current_user_scopes(user=user)
+    if user.role != UserRole.Admin and (target_scope_type, target_scope_id) not in allowed_scopes:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to claim hardware into this scope.",
+        )
+
+    device.claimed = True
+    device.scope_type = target_scope_type
+    device.scope_id = target_scope_id
+    device.device_profile_id = profile.id
+    device.secret = secrets.token_urlsafe(32)
+
+    parsed_labels = [l.strip().lower() for l in labels.split(",") if l.strip()]
+    if parsed_labels:
+        existing = db.query(Label).filter(Label.name.in_(parsed_labels)).all()
+        existing_names = {lbl.name for lbl in existing}
+        for name in parsed_labels:
+            if name not in existing_names:
+                lbl = Label(name=name, color="#3b82f6")
+                db.add(lbl)
+                existing.append(lbl)
+        device.labels = existing
+
+    db.commit()
+    return RedirectResponse(url="/dashboard?tab=onboard", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.post("/admin/deploy")
+def deploy_firmware_to_group(
+    firmware_id: int = Form(...),
+    application_group_id: int = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin_user),
+):
+    _ = current_user
+    release = db.query(FirmwareRelease).filter(FirmwareRelease.id == firmware_id).first()
+    if not release:
+        raise HTTPException(status_code=404, detail="Firmware release not found.")
+
+    group = db.query(ApplicationGroup).filter(ApplicationGroup.id == application_group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Application group not found.")
+
+    group.target_release_id = release.id
+    db.commit()
+    return RedirectResponse(url="/dashboard?tab=deploy", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.post("/api/fleet/override/{mac}")
+def override_device_firmware(
+    mac: str,
+    firmware_id: int = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin_user),
+):
+    _ = current_user
+    device = db.query(Device).filter(Device.mac_address == mac).first()
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found.")
+
+    release = db.query(FirmwareRelease).filter(FirmwareRelease.id == firmware_id).first()
+    if not release:
+        raise HTTPException(status_code=404, detail="Firmware release not found.")
+
+    if device.device_profile_id and release.device_profile_id != device.device_profile_id:
+        raise HTTPException(status_code=400, detail="Firmware profile mismatch for device.")
+
+    device.firmware_override_id = release.id
+    db.commit()
+    return RedirectResponse(url="/dashboard?tab=fleet", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.post("/api/fleet/unclaim/{mac}")
+def unclaim_device(
+    mac: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin_user),
+):
+    _ = current_user
+    device = db.query(Device).filter(Device.mac_address == mac).first()
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found.")
+
+    device.claimed = False
+    device.scope_type = None
+    device.scope_id = None
+    device.application_group_id = None
+    device.firmware_override_id = None
+    device.secret = "pending_claim"
+    db.commit()
+    return RedirectResponse(url="/dashboard?tab=fleet", status_code=status.HTTP_303_SEE_OTHER)

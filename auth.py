@@ -7,7 +7,7 @@ from authlib.integrations.starlette_client import OAuth
 from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from models import APIKey, User
+from models import APIKey, User, UserRole
 
 # =============================================================================
 # Google OAuth Configuration
@@ -52,7 +52,7 @@ def get_current_user_from_db(request: Request, db: Session) -> User:
 
 def require_admin(request: Request, db: Session) -> User:
     user = get_current_user_from_db(request, db)
-    if user.role != "Admin":
+    if user.role != UserRole.Admin:
          raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied: Admin privileges required.",
