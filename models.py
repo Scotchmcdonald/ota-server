@@ -73,6 +73,7 @@ class APIKey(Base):
     label = Column(String, nullable=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    last_used_at = Column(DateTime, nullable=True)
     
     user = relationship("User", back_populates="api_tokens")
 

@@ -107,6 +107,9 @@ def _migrate_legacy_sqlite_schema() -> None:
         if "user_id" not in api_key_columns:
             conn.execute(text("ALTER TABLE api_keys ADD COLUMN user_id INTEGER"))
 
+        if "last_used_at" not in api_key_columns:
+            conn.execute(text("ALTER TABLE api_keys ADD COLUMN last_used_at DATETIME"))
+
         if "owner_id" in api_key_columns:
             conn.execute(text("UPDATE api_keys SET user_id = owner_id WHERE user_id IS NULL"))
 
@@ -193,6 +196,8 @@ def get_current_user(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Token is not bound to a valid user.",
             )
+        api_key.last_used_at = datetime.utcnow()
+        db.commit()
         return api_key.user
 
     return get_current_user_from_db(request, db)
@@ -221,6 +226,8 @@ def require_admin_actor(
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key.")
         if api_key.user.role != UserRole.Admin:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin API key required.")
+        api_key.last_used_at = datetime.utcnow()
+        db.commit()
         return api_key.user
     return require_admin_user(request, db)
 
@@ -492,6 +499,9 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
 
     allowed_emails  = db.query(AllowedEmail).order_by(AllowedEmail.created_at).all()  if user_info.role == UserRole.Admin else []
     allowed_domains = db.query(AllowedDomain).order_by(AllowedDomain.created_at).all() if user_info.role == UserRole.Admin else []
+    admin_api_tokens = db.query(APIKey).join(User).order_by(APIKey.created_at.desc()).all() if user_info.role == UserRole.Admin else []
+    admin_teams = db.query(Team).order_by(Team.name.asc()).all() if user_info.role == UserRole.Admin else []
+    admin_users = db.query(User).order_by(User.email.asc()).all() if user_info.role == UserRole.Admin else []
 
     return templates.TemplateResponse(
         request=request,
@@ -510,6 +520,9 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             "unclaimed_devices": unclaimed_rows,
             "allowed_emails":  allowed_emails,
             "allowed_domains": allowed_domains,
+            "admin_api_tokens": admin_api_tokens,
+            "admin_teams": admin_teams,
+            "admin_users": admin_users,
         },
     )
 
@@ -621,7 +634,8 @@ def admin_add_team(
 @app.post("/admin/teams/assign")
 def admin_assign_team(
     email: str = Form(...),
-    team_name: str = Form(...),
+    team_name: Optional[str] = Form(None),
+    team_id: Optional[int] = Form(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin_user),
 ):
@@ -634,7 +648,12 @@ def admin_assign_team(
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
 
-    team = db.query(Team).filter(Team.name == team_name.strip()).first()
+    team = None
+    if team_id is not None:
+        team = db.query(Team).filter(Team.id == team_id).first()
+    elif team_name:
+        team = db.query(Team).filter(Team.name == team_name.strip()).first()
+
     if not team:
         raise HTTPException(status_code=404, detail="Team not found.")
 
@@ -642,6 +661,45 @@ def admin_assign_team(
         user.teams.append(team)
         db.commit()
 
+    return RedirectResponse(url="/dashboard?tab=admin", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.post("/admin/teams/members/remove")
+def admin_remove_user_from_team(
+    team_id: int = Form(...),
+    user_id: int = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin_user),
+):
+    _ = current_user
+    team = db.query(Team).filter(Team.id == team_id).first()
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found.")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    if team in user.teams:
+        user.teams.remove(team)
+        db.commit()
+
+    return RedirectResponse(url="/dashboard?tab=admin", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.post("/admin/teams/delete/{team_id}")
+def admin_delete_team(
+    team_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin_user),
+):
+    _ = current_user
+    team = db.query(Team).filter(Team.id == team_id).first()
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found.")
+
+    db.delete(team)
+    db.commit()
     return RedirectResponse(url="/dashboard?tab=admin", status_code=status.HTTP_303_SEE_OTHER)
 
 
@@ -1065,7 +1123,7 @@ def update_fleet_device(
     _upsert_labels_for_device(device, labels, db)
 
     db.commit()
-    return RedirectResponse(url="/dashboard?tab=fleet", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url="/dashboard?tab=devices", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.post("/admin/deploy")
@@ -1107,4 +1165,4 @@ def unclaim_device(
     device.firmware_override_id = None
     device.secret = "pending_claim"
     db.commit()
-    return RedirectResponse(url="/dashboard?tab=fleet", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url="/dashboard?tab=devices", status_code=status.HTTP_303_SEE_OTHER)
