@@ -391,6 +391,20 @@ def _parse_optional_int(value: Optional[str], field_name: str) -> Optional[int]:
         raise HTTPException(status_code=400, detail=f"Invalid {field_name}.")
 
 
+def _resolve_compute_module_name(raw_value: str, db: Session) -> str:
+    cleaned = (raw_value or "").strip()
+    if not cleaned:
+        raise HTTPException(status_code=400, detail="Missing compute_module.")
+
+    if cleaned.isdigit():
+        module = db.query(ComputeModule).filter(ComputeModule.id == int(cleaned)).first()
+        if not module:
+            raise HTTPException(status_code=400, detail="Unknown compute_module id.")
+        return module.name
+
+    return cleaned
+
+
 def _upsert_labels_for_device(device: Device, labels_csv: str, db: Session) -> None:
     parsed_labels = [l.strip().lower() for l in (labels_csv or "").split(",") if l.strip()]
     if not parsed_labels:
@@ -1181,9 +1195,7 @@ def upload_firmware_m2m(
     if not raw_version:
         raise HTTPException(status_code=400, detail="Missing firmware_version.")
 
-    compute_module_clean = (compute_module or "").strip()
-    if not compute_module_clean:
-        raise HTTPException(status_code=400, detail="Missing compute_module.")
+    compute_module_clean = _resolve_compute_module_name(compute_module, db)
 
     version_clean = _sanitize_field(raw_version, allow_dots=True)
     compute_module_slug = _sanitize_field(compute_module_clean)
@@ -1289,9 +1301,7 @@ def upload_firmware_web(
     if not raw_version:
         raise HTTPException(status_code=400, detail="Missing firmware_version.")
 
-    compute_module_clean = (compute_module or "").strip()
-    if not compute_module_clean:
-        raise HTTPException(status_code=400, detail="Missing compute_module.")
+    compute_module_clean = _resolve_compute_module_name(compute_module, db)
 
     version_clean = _sanitize_field(raw_version, allow_dots=True)
     compute_module_slug = _sanitize_field(compute_module_clean)

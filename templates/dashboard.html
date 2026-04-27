@@ -952,7 +952,7 @@
                     <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Compute Module Architecture</label>
                     <select name="compute_module" required class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-emerald-500 outline-none">
                         {% for cm in compute_modules %}
-                        <option value="{{ cm.name }}">{{ cm.name }}</option>
+                        <option value="{{ cm.id }}">{{ cm.name }}</option>
                         {% else %}
                         <option value="" disabled selected>No compute modules — add one in Hardware</option>
                         {% endfor %}
