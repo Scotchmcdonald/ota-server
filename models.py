@@ -163,14 +163,14 @@ class FirmwareRelease(Base):
     """
     __tablename__ = "firmware_releases"
     __table_args__ = (
-        UniqueConstraint("release_train", "compute_module", "carrier_board_id", name="uq_release_target"),
+        UniqueConstraint("firmware_name", "firmware_version", "compute_module", "carrier_board_id", name="uq_release_target"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    version = Column(String, nullable=False, index=True)            # e.g. "v2.3.1"
+    firmware_name = Column(String, nullable=False, index=True)      # e.g. "Sparkle"
+    firmware_version = Column(String, nullable=False, index=True)   # e.g. "3.0.0"
     file_path = Column(String, nullable=False)
-    
-    release_train = Column(String, nullable=False, index=True)      # e.g. "Sparkle v3.0"
+
     compute_module = Column(String, nullable=False, index=True)     # e.g. "ESP32-S3-WROOM-1"
     carrier_board_id = Column(Integer, ForeignKey("carrier_boards.id"), nullable=False, index=True)
     
@@ -218,6 +218,8 @@ class ApplicationGroup(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False, index=True)               # e.g. "Outdoor Sensors"
     team_id = Column(Integer, ForeignKey("teams.id", ondelete="CASCADE"), nullable=False, index=True)
+    target_firmware_name = Column(String, nullable=True, index=True)
+    target_firmware_version = Column(String, nullable=True, index=True)
     # Nullable: a group may exist before any firmware is designated.
     target_release_id = Column(Integer, ForeignKey("firmware_releases.id", ondelete="SET NULL"), nullable=True, index=True)
 

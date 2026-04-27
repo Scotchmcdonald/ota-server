@@ -133,54 +133,133 @@
         <section id="tab-deploy" class="tab-content space-y-6">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-slate-800 pb-4 gap-4">
                 <div>
-                    <h2 class="text-2xl font-light text-slate-200">Firmware Library</h2>
-                    <p class="text-sm text-slate-500 font-mono mt-1">Upload and review firmware releases available for fleet targeting</p>
+                    <h2 class="text-2xl font-light text-slate-200">Group Staging</h2>
+                    <p class="text-sm text-slate-500 font-mono mt-1">Validate hardware coverage per group before promoting a firmware target</p>
                 </div>
-                
-                <div class="flex flex-wrap gap-3">
-                    <select id="deploy-scope-filter" class="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-md px-3 py-1.5 focus:ring-1 focus:ring-sky-500 outline-none">
-                        <option value="all">All Scopes</option>
-                        <option value="personal">Personal</option>
-                        <option value="team-alpha">Team Alpha</option>
-                    </select>
-                    <select id="deploy-label-filter" class="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-md px-3 py-1.5 focus:ring-1 focus:ring-sky-500 outline-none">
-                        <option value="all">All Labels</option>
-                        <option value="stable">Stable</option>
-                        <option value="beta">Beta</option>
-                    </select>
-                    {% if db_user and db_user.role.value == 'Admin' %}
-                    <button type="button" onclick="openUploadModal()" class="px-4 py-1.5 text-xs font-bold tracking-widest uppercase rounded bg-sky-600/20 text-sky-300 border border-sky-500/60 hover:bg-sky-500 hover:text-white hover:shadow-[0_0_15px_rgba(14,165,233,0.35)] transition-all">
-                        Upload Payload
-                    </button>
-                    {% endif %}
-                </div>
+
+                {% if db_user and db_user.role.value == 'Admin' %}
+                <button type="button" onclick="openUploadModal()" class="px-4 py-1.5 text-xs font-bold tracking-widest uppercase rounded bg-sky-600/20 text-sky-300 border border-sky-500/60 hover:bg-sky-500 hover:text-white hover:shadow-[0_0_15px_rgba(14,165,233,0.35)] transition-all">
+                    Upload Payload
+                </button>
+                {% endif %}
             </div>
 
-            <div class="glass-panel overflow-hidden rounded-xl shadow-2xl">
-                <table class="min-w-full divide-y divide-slate-800" id="deploy-table">
-                    <thead class="bg-slate-900/50">
+            <div class="glass-panel overflow-hidden rounded-xl shadow-2xl border-t border-t-emerald-500/30">
+                <table class="min-w-full divide-y divide-slate-800" id="staging-table">
+                    <thead class="bg-slate-900/60">
                         <tr>
-                            <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Version Tuple</th>
-                            <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Scope</th>
-                            <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Labels</th>
-                            <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Uploaded</th>
+                            <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Application Group</th>
+                            <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Current Target</th>
+                            <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Staged Target</th>
+                            <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Readiness</th>
                             <th class="px-6 py-4 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Action</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-800/50 text-sm bg-slate-900/20">
-                        {% for fw in firmwares|default([{'version': 'v1.4.2', 'scope': 'team-alpha', 'labels': ['stable'], 'date': '2026-04-24'}, {'version': 'v2.0.0-beta', 'scope': 'personal', 'labels': ['beta'], 'date': '2026-04-25'}]) %}
-                        <tr class="hover:bg-slate-800/40 transition-colors fw-row" data-scope="{{ fw.scope|lower }}" data-labels="{{ fw.labels|join(',')|lower }}">
-                            <td class="px-6 py-4 whitespace-nowrap text-sky-400 font-mono text-sm font-bold">{{ fw.version }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-slate-300 text-xs uppercase tracking-wider">{{ fw.scope }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap flex gap-1">
-                                {% for label in fw.labels %}
-                                    <span class="px-2 py-0.5 text-[9px] font-bold rounded-full bg-slate-800 text-slate-300 border border-slate-600 uppercase">{{ label }}</span>
-                                {% endfor %}
+                    <tbody class="divide-y divide-slate-800/50 bg-slate-900/20 text-sm">
+                        {% for row in staging_rows %}
+                        <tr class="hover:bg-slate-800/40 transition-colors staging-row" data-group-id="{{ row.group.id }}">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <p class="text-slate-200 font-mono text-xs">{{ row.group.name }}</p>
+                                <p class="text-[10px] text-slate-500">{{ row.group.team.name if row.group.team else 'Unassigned Team' }}</p>
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-slate-500 font-mono text-xs">{{ fw.date }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-slate-300 font-mono text-xs">
+                                {% if row.current_target_firmware_name and row.current_target_firmware_version %}
+                                    {{ row.current_target_firmware_name }} / {{ row.current_target_firmware_version }}
+                                {% else %}
+                                    None
+                                {% endif %}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex flex-col gap-2">
+                                    <select
+                                        name="firmware_name"
+                                        class="staging-name-select bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-md px-2 py-1.5 focus:ring-1 focus:ring-emerald-500 outline-none"
+                                        data-group-id="{{ row.group.id }}"
+                                    >
+                                        <option value="">Select firmware name</option>
+                                        {% for firmware_name in firmware_names %}
+                                        <option value="{{ firmware_name }}" {% if firmware_name == row.staged_firmware_name %}selected{% endif %}>{{ firmware_name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <select
+                                        name="firmware_version"
+                                        class="staging-version-select bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-md px-2 py-1.5 focus:ring-1 focus:ring-emerald-500 outline-none"
+                                        data-group-id="{{ row.group.id }}"
+                                        data-selected-version="{{ row.staged_firmware_version }}"
+                                    >
+                                        <option value="">Select version</option>
+                                    </select>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                {% set ready = row.readiness.ready %}
+                                <span
+                                    class="staging-status inline-flex items-center gap-1.5 px-2 py-1 text-[10px] uppercase font-bold rounded border {{ 'text-emerald-300 border-emerald-700/50 bg-emerald-950/40' if ready else 'text-amber-300 border-amber-700/50 bg-amber-950/40' }}"
+                                    data-group-id="{{ row.group.id }}"
+                                >
+                                    <span class="w-1.5 h-1.5 rounded-full {{ 'bg-emerald-400' if ready else 'bg-amber-400' }}"></span>
+                                    {{ row.readiness.status }}
+                                </span>
+                                <p class="text-[10px] text-slate-500 mt-1 staging-summary" data-group-id="{{ row.group.id }}">
+                                    {{ row.readiness.missing_combos|length }} missing of {{ row.readiness.required_combos|length }} combos
+                                </p>
+                            </td>
                             <td class="px-6 py-4 whitespace-nowrap text-right">
-                                <button onclick="openDistributeModal('{{ fw.version }}', '{{ fw.id | default('') }}')" class="px-3 py-1.5 text-[10px] font-bold tracking-widest uppercase rounded bg-emerald-900/40 text-emerald-400 border border-emerald-700/50 hover:bg-emerald-600 hover:text-white transition-all">Distribute</button>
+                                {% if db_user and db_user.role.value == 'Admin' %}
+                                <form action="/api/deploy" method="POST" class="inline-flex items-center admin-guard-form" data-success-redirect="/dashboard?tab=deploy">
+                                    <input type="hidden" name="group_id" value="{{ row.group.id }}">
+                                    <input type="hidden" name="firmware_name" value="{{ row.staged_firmware_name }}" class="staging-firmware-name-hidden" data-group-id="{{ row.group.id }}">
+                                    <input type="hidden" name="firmware_version" value="{{ row.staged_firmware_version }}" class="staging-firmware-version-hidden" data-group-id="{{ row.group.id }}">
+                                    <button
+                                        type="submit"
+                                        class="staging-deploy-btn px-3 py-1.5 text-[10px] font-bold tracking-widest uppercase rounded border transition-all {{ 'bg-emerald-900/40 text-emerald-400 border-emerald-700/50 hover:bg-emerald-600 hover:text-white' if ready else 'bg-slate-900/50 text-slate-500 border-slate-700 cursor-not-allowed' }}"
+                                        data-group-id="{{ row.group.id }}"
+                                        {% if not ready %}disabled{% endif %}
+                                    >
+                                        Deploy to Group
+                                    </button>
+                                </form>
+                                {% else %}
+                                <span class="text-slate-500 text-[10px] font-mono">Admin only</span>
+                                {% endif %}
                             </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="px-6 py-12 text-center text-slate-500 font-mono text-sm tracking-widest">NO APPLICATION GROUPS FOUND</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="glass-panel overflow-hidden rounded-xl shadow-2xl">
+                <div class="px-6 py-4 border-b border-slate-800 bg-slate-900/50">
+                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest">Payload Catalog</h3>
+                    <p class="text-[10px] text-slate-500 font-mono mt-1">Inventory of uploaded payloads by firmware target and hardware tuple</p>
+                </div>
+                <table class="min-w-full divide-y divide-slate-800">
+                    <thead class="bg-slate-900/30">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Firmware Name</th>
+                            <th class="px-6 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Firmware Version</th>
+                            <th class="px-6 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Compute Module</th>
+                            <th class="px-6 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Carrier Board</th>
+                            <th class="px-6 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Uploaded</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/50 text-xs bg-slate-900/20">
+                        {% for fw in firmwares %}
+                        <tr class="hover:bg-slate-800/40 transition-colors">
+                            <td class="px-6 py-3 whitespace-nowrap text-emerald-300 font-mono">{{ fw.firmware_name }}</td>
+                            <td class="px-6 py-3 whitespace-nowrap text-slate-200 font-mono">{{ fw.firmware_version }}</td>
+                            <td class="px-6 py-3 whitespace-nowrap text-slate-300 font-mono">{{ fw.compute_module }}</td>
+                            <td class="px-6 py-3 whitespace-nowrap text-slate-400">{{ fw.carrier_board.name if fw.carrier_board else 'Unknown' }}</td>
+                            <td class="px-6 py-3 whitespace-nowrap text-slate-500 font-mono">{{ fw.upload_timestamp }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="px-6 py-8 text-center text-slate-500 font-mono">No payloads uploaded yet.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -214,34 +293,15 @@
                             <td class="px-6 py-4 whitespace-nowrap text-slate-200 font-mono text-xs">{{ group.name }}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-slate-400 text-xs">{{ group.team.name if group.team else 'Unassigned' }}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-slate-300 text-xs font-mono">
-                                {% if group.target_release %}
-                                    {{ group.target_release.version }}
-                                    {% if group.target_release.device_profile %}
-                                        <span class="text-slate-500">({{ group.target_release.device_profile.name }})</span>
-                                    {% endif %}
+                                {% if group.target_firmware_name and group.target_firmware_version %}
+                                    {{ group.target_firmware_name }} / {{ group.target_firmware_version }}
                                 {% else %}
                                     <span class="text-slate-500">No target set</span>
                                 {% endif %}
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-slate-400 text-xs font-mono">{{ group.devices|length }}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-right">
-                                {% if db_user and db_user.role.value == 'Admin' %}
-                                    {% if firmwares %}
-                                    <form action="/admin/deploy" method="POST" class="inline-flex items-center gap-2 admin-guard-form" data-success-redirect="/dashboard?tab=fleet">
-                                        <input type="hidden" name="application_group_id" value="{{ group.id }}">
-                                        <select name="firmware_id" class="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-md px-2 py-1 focus:ring-1 focus:ring-emerald-500 outline-none">
-                                            {% for fw in firmwares %}
-                                            <option value="{{ fw.id }}" {% if group.target_release_id == fw.id %}selected{% endif %}>#{{ fw.id }} - {{ fw.version }}</option>
-                                            {% endfor %}
-                                        </select>
-                                        <button type="submit" class="px-2.5 py-1 text-[9px] font-bold tracking-widest uppercase rounded bg-emerald-900/40 text-emerald-400 border border-emerald-700/50 hover:bg-emerald-600 hover:text-white transition-all">Set Target</button>
-                                    </form>
-                                    {% else %}
-                                    <span class="text-slate-500 text-[10px] font-mono">Upload firmware first</span>
-                                    {% endif %}
-                                {% else %}
-                                    <span class="text-slate-500 text-[10px] font-mono">Admin only</span>
-                                {% endif %}
+                                <span class="text-slate-500 text-[10px] font-mono">Use Group Staging in Firmware tab</span>
                             </td>
                         </tr>
                         {% else %}
@@ -292,8 +352,8 @@
                     </thead>
                     <tbody class="divide-y divide-slate-800/50 bg-slate-900/20">
                         {% for node in fleet_nodes|default([
-                            {'mac': 'F0:E1:D2:C3:B4:A5', 'scope': 'Personal', 'scope_slug': 'personal', 'labels': ['testing', 'v1-hw'], 'fw': 'v1.4.1', 'batt': 88, 'status': 'online', 'device_profile_id': 1, 'firmware_override_id': None},
-                            {'mac': '11:22:33:44:55:66', 'scope': 'Team Alpha', 'scope_slug': 'team-alpha', 'labels': ['production'], 'fw': 'v1.4.2', 'batt': 14, 'status': 'offline', 'device_profile_id': None, 'firmware_override_id': None}
+                            {'mac': 'F0:E1:D2:C3:B4:A5', 'scope': 'Personal', 'scope_slug': 'personal', 'labels': ['testing', 'v1-hw'], 'fw': 'v1.4.1', 'batt': 88, 'status': 'online', 'carrier_board_id': 1, 'firmware_override_id': None},
+                            {'mac': '11:22:33:44:55:66', 'scope': 'Team Alpha', 'scope_slug': 'team-alpha', 'labels': ['production'], 'fw': 'v1.4.2', 'batt': 14, 'status': 'offline', 'carrier_board_id': None, 'firmware_override_id': None}
                         ]) %}
                         <tr class="hover:bg-slate-800/40 transition-colors device-row" data-scope="{{ node.scope_slug|lower }}" data-labels="{{ node.labels|join(',')|lower }}">
                             <td class="px-6 py-4 whitespace-nowrap text-sky-300 font-mono text-sm tracking-widest">{{ node.mac }}</td>
@@ -333,7 +393,7 @@
                                 <div class="flex items-center justify-end gap-2">
                                     <button
                                         type="button"
-                                        onclick='openManageDeviceModal({{ node.mac|tojson }}, {{ node.scope_slug|tojson }}, {{ node.labels|tojson }}, {{ node.device_profile_id|tojson }}, {{ node.firmware_override_id|tojson }})'
+                                        onclick='openManageDeviceModal({{ node.mac|tojson }}, {{ node.scope_slug|tojson }}, {{ node.labels|tojson }}, {{ node.carrier_board_id|tojson }}, {{ node.firmware_override_id|tojson }})'
                                         class="px-2.5 py-1 text-[9px] font-bold tracking-widest uppercase rounded bg-amber-900/40 text-amber-300 border border-amber-700/50 hover:bg-amber-600 hover:text-white transition-all"
                                     >
                                         Manage
@@ -709,7 +769,7 @@
 
                 <div>
                     <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Carrier Board</label>
-                    <select name="carrier_board_id" class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none">
+                    <select id="manage-device-carrier-board" name="carrier_board_id" class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none">
                         <option value="">None (Unassigned)</option>
                         {% for carrier in carrier_boards %}
                         <option value="{{ carrier.id }}">{{ carrier.name }}</option>
@@ -732,7 +792,7 @@
                     <select name="firmware_override_id" id="manage-device-override" class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none">
                         <option value="">None (Follow Fleet Target)</option>
                         {% for fw in firmwares %}
-                        <option value="{{ fw.id }}">#{{ fw.id }} - {{ fw.version }} ({{ fw.carrier_board.name if fw.carrier_board else 'No Profile' }})</option>
+                        <option value="{{ fw.id }}">#{{ fw.id }} - {{ fw.firmware_name }} {{ fw.firmware_version }} ({{ fw.carrier_board.name if fw.carrier_board else 'No Profile' }})</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -765,13 +825,13 @@
                 </div>
 
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Version String</label>
-                    <input type="text" name="version_string" placeholder="2026.04.26+fleet.1" required class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-emerald-500 outline-none placeholder-slate-500">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Firmware Name</label>
+                    <input type="text" name="firmware_name" placeholder="e.g. Sparkle" required class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-emerald-500 outline-none placeholder-slate-500">
                 </div>
 
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Release Train</label>
-                    <input type="text" name="release_train" placeholder="e.g. Sparkle v3.0" required class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-emerald-500 outline-none">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Firmware Version</label>
+                    <input type="text" name="firmware_version" placeholder="e.g. 3.0.0" required class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-emerald-500 outline-none">
                 </div>
 
                 <div>
@@ -791,64 +851,15 @@
                 <div>
                     <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Visibility Scope</label>
                     <select name="scope" required class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-emerald-500 outline-none">
-                        <option value="personal">Personal</option>
-                        <option value="team-alpha">Team Alpha</option>
-                        <option value="team-bravo">Team Bravo</option>
-                    </select>
-                </div>
-
-                <label class="flex items-center gap-2 text-xs text-slate-300">
-                    <input type="checkbox" name="set_as_latest" value="true" class="h-4 w-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500">
-                    Set as latest for auto-deploy
-                </label>
-
-                <div class="pt-2 flex gap-3">
-                    <button type="button" onclick="closeUploadModal()" class="flex-1 py-2.5 text-xs font-bold uppercase rounded border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors">Cancel</button>
-                    <button type="submit" id="upload-submit-btn" class="flex-1 py-2.5 text-xs font-bold uppercase rounded bg-emerald-600 text-white hover:bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.35)] transition-all">Upload Payload</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Distribute Firmware Modal -->
-    <div id="distribute-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
-        <div id="distribute-modal-content" class="glass-panel p-6 rounded-xl shadow-[0_0_40px_rgba(0,0,0,0.8)] max-w-md w-full border border-emerald-500/30 transform scale-95 opacity-0 transition-all duration-200">
-            <div class="flex justify-between items-center mb-5">
-                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-widest flex items-center gap-2">
-                    <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
-                    Distribute Firmware
-                </h3>
-                <button onclick="closeDistributeModal()" type="button" class="text-slate-500 border border-slate-700 rounded hover:text-white hover:bg-rose-500 hover:border-rose-500 transition-colors p-1" title="Close">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
-            </div>
-
-            <form action="/admin/deploy" method="POST" id="distribute-form" class="space-y-5 admin-guard-form" data-success-redirect="/dashboard?tab=deploy">
-                <input type="hidden" id="distribute-firmware-id" name="firmware_id" value="">
-
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Firmware Version</label>
-                    <input type="text" id="distribute-version" name="version" readonly
-                        class="w-full bg-slate-900/80 border border-slate-700 rounded py-2 px-3 text-sm font-mono text-emerald-400 outline-none cursor-not-allowed">
-                </div>
-
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Target Application Group</label>
-                    <select name="application_group_id" required
-                        class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-emerald-500 outline-none">
-                        {% for group in application_groups|default([
-                            {'id': 1, 'name': 'Team Alpha - Outdoor Sensors'},
-                            {'id': 2, 'name': 'Team Bravo - Indoor Climate'},
-                            {'id': 3, 'name': 'Engineering - Dev Bench'}
-                        ]) %}
-                        <option value="{{ group.id }}">{{ group.name }}</option>
+                        {% for scope_option in scope_options|default([{'value': 'personal', 'label': 'Personal (Isolated)'}]) %}
+                        <option value="{{ scope_option.value }}">{{ scope_option.label }}</option>
                         {% endfor %}
                     </select>
                 </div>
 
                 <div class="pt-2 flex gap-3">
-                    <button type="button" onclick="closeDistributeModal()" class="flex-1 py-2.5 text-xs font-bold uppercase rounded border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors">Cancel</button>
-                    <button type="submit" class="flex-1 py-2.5 text-xs font-bold uppercase rounded bg-emerald-600 text-white hover:bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.35)] transition-all">Confirm Deploy</button>
+                    <button type="button" onclick="closeUploadModal()" class="flex-1 py-2.5 text-xs font-bold uppercase rounded border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors">Cancel</button>
+                    <button type="submit" id="upload-submit-btn" class="flex-1 py-2.5 text-xs font-bold uppercase rounded bg-emerald-600 text-white hover:bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.35)] transition-all">Upload Payload</button>
                 </div>
             </form>
         </div>
@@ -945,10 +956,6 @@
             });
         }
 
-        // Deploy Table Filters
-        document.getElementById('deploy-scope-filter')?.addEventListener('change', () => filterTable('.fw-row', 'deploy-scope-filter', 'deploy-label-filter'));
-        document.getElementById('deploy-label-filter')?.addEventListener('change', () => filterTable('.fw-row', 'deploy-scope-filter', 'deploy-label-filter'));
-
         // Devices Table Filters
         document.getElementById('devices-scope-filter')?.addEventListener('change', () => filterTable('.device-row', 'devices-scope-filter', 'devices-label-filter'));
         document.getElementById('devices-label-filter')?.addEventListener('change', () => filterTable('.device-row', 'devices-scope-filter', 'devices-label-filter'));
@@ -964,7 +971,7 @@
         const manageDeviceMacInput = document.getElementById('manage-device-mac');
         const manageDeviceScopeInput = document.getElementById('manage-device-scope');
         const manageDeviceLabelsInput = document.getElementById('manage-device-labels');
-        const manageDeviceProfileInput = document.getElementById('manage-device-profile');
+        const manageDeviceCarrierBoardInput = document.getElementById('manage-device-carrier-board');
         const manageDeviceOverrideInput = document.getElementById('manage-device-override');
         const uploadModal = document.getElementById('upload-modal');
         const uploadModalContent = document.getElementById('upload-modal-content');
@@ -1095,6 +1102,130 @@
 
         initAdminGuardForms();
 
+        const firmwareVersionsByName = {{ firmware_versions_by_name | tojson }};
+
+        function setStagingBadge(groupId, ready, status, missingCount, totalCount) {
+            const badge = document.querySelector(`.staging-status[data-group-id="${groupId}"]`);
+            const summary = document.querySelector(`.staging-summary[data-group-id="${groupId}"]`);
+            const deployBtn = document.querySelector(`.staging-deploy-btn[data-group-id="${groupId}"]`);
+
+            if (badge) {
+                badge.className = `staging-status inline-flex items-center gap-1.5 px-2 py-1 text-[10px] uppercase font-bold rounded border ${ready ? 'text-emerald-300 border-emerald-700/50 bg-emerald-950/40' : 'text-amber-300 border-amber-700/50 bg-amber-950/40'}`;
+                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full ${ready ? 'bg-emerald-400' : 'bg-amber-400'}"></span>${status}`;
+            }
+
+            if (summary) {
+                summary.textContent = `${missingCount} missing of ${totalCount} combos`;
+            }
+
+            if (deployBtn) {
+                deployBtn.disabled = !ready;
+                deployBtn.className = `staging-deploy-btn px-3 py-1.5 text-[10px] font-bold tracking-widest uppercase rounded border transition-all ${ready ? 'bg-emerald-900/40 text-emerald-400 border-emerald-700/50 hover:bg-emerald-600 hover:text-white' : 'bg-slate-900/50 text-slate-500 border-slate-700 cursor-not-allowed'}`;
+            }
+        }
+
+        function populateVersionDropdown(groupId, firmwareName, preferredVersion = '') {
+            const versionSelect = document.querySelector(`.staging-version-select[data-group-id="${groupId}"]`);
+            if (!versionSelect) return '';
+
+            const versions = firmwareName ? (firmwareVersionsByName[firmwareName] || []) : [];
+            versionSelect.innerHTML = '<option value="">Select version</option>';
+
+            versions.forEach((version) => {
+                const option = document.createElement('option');
+                option.value = version;
+                option.textContent = version;
+                versionSelect.appendChild(option);
+            });
+
+            if (!versions.length) {
+                versionSelect.value = '';
+                return '';
+            }
+
+            const selected = versions.includes(preferredVersion) ? preferredVersion : versions[0];
+            versionSelect.value = selected;
+            return selected;
+        }
+
+        async function refreshStagingReadiness(groupId, firmwareName, firmwareVersion) {
+            const nameInput = document.querySelector(`.staging-firmware-name-hidden[data-group-id="${groupId}"]`);
+            const versionInput = document.querySelector(`.staging-firmware-version-hidden[data-group-id="${groupId}"]`);
+            if (nameInput) {
+                nameInput.value = firmwareName;
+            }
+            if (versionInput) {
+                versionInput.value = firmwareVersion;
+            }
+
+            if (!firmwareName || !firmwareVersion) {
+                setStagingBadge(groupId, false, 'Preparing', 0, 0);
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/groups/${encodeURIComponent(groupId)}/readiness?firmware_name=${encodeURIComponent(firmwareName)}&firmware_version=${encodeURIComponent(firmwareVersion)}`, {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    headers: { 'Accept': 'application/json' },
+                });
+
+                let payload = null;
+                try {
+                    payload = await response.json();
+                } catch (_) {
+                    payload = null;
+                }
+
+                if (!response.ok) {
+                    const msg = getErrorMessage(payload, 'Could not evaluate readiness.');
+                    showToast(msg, 'error');
+                    setStagingBadge(groupId, false, 'Preparing', 0, 0);
+                    return;
+                }
+
+                setStagingBadge(
+                    groupId,
+                    !!payload.ready,
+                    payload.status || 'Preparing',
+                    (payload.missing_combos || []).length,
+                    (payload.required_combos || []).length,
+                );
+            } catch (_) {
+                showToast('Readiness check failed.', 'error');
+                setStagingBadge(groupId, false, 'Preparing', 0, 0);
+            }
+        }
+
+        function initStagingSelectors() {
+            document.querySelectorAll('.staging-name-select').forEach((nameSelect) => {
+                const groupId = nameSelect.dataset.groupId;
+                const versionSelect = document.querySelector(`.staging-version-select[data-group-id="${groupId}"]`);
+                const preferredVersion = versionSelect?.dataset.selectedVersion || '';
+                const initialName = nameSelect.value || '';
+                const selectedVersion = populateVersionDropdown(groupId, initialName, preferredVersion);
+                refreshStagingReadiness(groupId, initialName, selectedVersion);
+
+                nameSelect.addEventListener('change', (e) => {
+                    const selectedName = e.target.value || '';
+                    const selectedVersionInner = populateVersionDropdown(groupId, selectedName);
+                    refreshStagingReadiness(groupId, selectedName, selectedVersionInner);
+                });
+            });
+
+            document.querySelectorAll('.staging-version-select').forEach((versionSelect) => {
+                versionSelect.addEventListener('change', (e) => {
+                    const groupId = e.target.dataset.groupId;
+                    const nameSelect = document.querySelector(`.staging-name-select[data-group-id="${groupId}"]`);
+                    const selectedName = nameSelect ? (nameSelect.value || '') : '';
+                    const selectedVersion = e.target.value || '';
+                    refreshStagingReadiness(groupId, selectedName, selectedVersion);
+                });
+            });
+        }
+
+        initStagingSelectors();
+
         function openClaimModal(mac) {
             if (claimMacInput) claimMacInput.value = mac;
             if (claimModal) {
@@ -1122,7 +1253,7 @@
             }, 200);
         }
 
-        function openManageDeviceModal(mac, scope, labels, profile, override) {
+        function openManageDeviceModal(mac, scope, labels, carrierBoardId, override) {
             if (manageDeviceMacInput) manageDeviceMacInput.value = mac || '';
             if (manageDeviceScopeInput) manageDeviceScopeInput.value = scope || 'personal';
 
@@ -1134,8 +1265,8 @@
                 }
             }
 
-            if (manageDeviceProfileInput) {
-                manageDeviceProfileInput.value = profile != null ? String(profile) : '';
+            if (manageDeviceCarrierBoardInput) {
+                manageDeviceCarrierBoardInput.value = carrierBoardId != null ? String(carrierBoardId) : '';
             }
 
             if (manageDeviceOverrideInput) {
@@ -1257,9 +1388,6 @@
             if (e.key === 'Escape' && manageDeviceModal && !manageDeviceModal.classList.contains('hidden')) {
                 closeManageDeviceModal();
             }
-            if (e.key === 'Escape' && distributeModal && !distributeModal.classList.contains('hidden')) {
-                closeDistributeModal();
-            }
         });
 
         // Background click close
@@ -1279,44 +1407,6 @@
             if (e.target === manageDeviceModal) {
                 closeManageDeviceModal();
             }
-        });
-
-        // -- Distribute Modal Logic -------------------------
-        const distributeModal = document.getElementById('distribute-modal');
-        const distributeModalContent = document.getElementById('distribute-modal-content');
-        const distributeVersionInput = document.getElementById('distribute-version');
-        const distributeFirmwareIdInput = document.getElementById('distribute-firmware-id');
-
-        function openDistributeModal(version, id) {
-            if (distributeVersionInput) distributeVersionInput.value = version;
-            if (distributeFirmwareIdInput) distributeFirmwareIdInput.value = id;
-            if (distributeModal) {
-                distributeModal.classList.remove('hidden');
-                distributeModal.classList.add('flex');
-            }
-            setTimeout(() => {
-                if (distributeModalContent) {
-                    distributeModalContent.classList.remove('scale-95', 'opacity-0');
-                    distributeModalContent.classList.add('scale-100', 'opacity-100');
-                }
-            }, 10);
-        }
-
-        function closeDistributeModal() {
-            if (distributeModalContent) {
-                distributeModalContent.classList.remove('scale-100', 'opacity-100');
-                distributeModalContent.classList.add('scale-95', 'opacity-0');
-            }
-            setTimeout(() => {
-                if (distributeModal) {
-                    distributeModal.classList.add('hidden');
-                    distributeModal.classList.remove('flex');
-                }
-            }, 200);
-        }
-
-        distributeModal?.addEventListener('click', (e) => {
-            if (e.target === distributeModal) closeDistributeModal();
         });
 
         function refreshData(e) {

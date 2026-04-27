@@ -14,6 +14,7 @@ from packaging.version import parse as parse_version
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy import create_engine, event, text, and_, or_, false
+from sqlalchemy.exc import IntegrityError
 from starlette.middleware.sessions import SessionMiddleware
 from models import Base, User, Team, APIKey, Device, Firmware, Label, UserRole, ScopeType, CarrierBoard, FirmwareRelease, ApplicationGroup, AllowedEmail, AllowedDomain
 from auth import (
@@ -110,15 +111,25 @@ def _migrate_legacy_sqlite_schema() -> None:
         firmware_release_table_info = conn.execute(text("PRAGMA table_info(firmware_releases)"))
         firmware_release_columns = {row[1] for row in firmware_release_table_info.fetchall()}
 
-        if "release_train" not in firmware_release_columns:
-            conn.execute(text("ALTER TABLE firmware_releases ADD COLUMN release_train VARCHAR"))
+        if "firmware_name" not in firmware_release_columns:
+            conn.execute(text("ALTER TABLE firmware_releases ADD COLUMN firmware_name VARCHAR"))
+        if "firmware_version" not in firmware_release_columns:
+            conn.execute(text("ALTER TABLE firmware_releases ADD COLUMN firmware_version VARCHAR"))
         if "compute_module" not in firmware_release_columns:
             conn.execute(text("ALTER TABLE firmware_releases ADD COLUMN compute_module VARCHAR"))
         if "carrier_board_id" not in firmware_release_columns:
             conn.execute(text("ALTER TABLE firmware_releases ADD COLUMN carrier_board_id INTEGER"))
 
+        # Backfill newly introduced naming/versioning columns from legacy schema.
+        if "version" in firmware_release_columns:
+            conn.execute(text("UPDATE firmware_releases SET firmware_version = version WHERE firmware_version IS NULL OR firmware_version = ''"))
         application_group_table_info = conn.execute(text("PRAGMA table_info(application_groups)"))
         application_group_columns = {row[1] for row in application_group_table_info.fetchall()}
+
+        if "target_firmware_name" not in application_group_columns:
+            conn.execute(text("ALTER TABLE application_groups ADD COLUMN target_firmware_name VARCHAR"))
+        if "target_firmware_version" not in application_group_columns:
+            conn.execute(text("ALTER TABLE application_groups ADD COLUMN target_firmware_version VARCHAR"))
 
         if "target_release_id" not in application_group_columns:
             conn.execute(text("ALTER TABLE application_groups ADD COLUMN target_release_id INTEGER"))
@@ -359,6 +370,100 @@ def _sanitize_field(value: str, allow_dots: bool = False) -> str:
     return re.sub(pattern, "", value)
 
 
+def _normalize_firmware_name(value: Optional[str]) -> str:
+    return (value or "").strip()
+
+
+def _normalize_firmware_version(value: Optional[str]) -> str:
+    return (value or "").strip()
+
+
+def _evaluate_group_readiness(group: ApplicationGroup, firmware_name: str, firmware_version: str, db: Session) -> dict:
+    normalized_name = _normalize_firmware_name(firmware_name)
+    normalized_version = _normalize_firmware_version(firmware_version)
+
+    unknown_hardware_count = db.query(Device.id).filter(
+        Device.application_group_id == group.id,
+        Device.claimed == True,
+        or_(
+            Device.compute_module.is_(None),
+            Device.compute_module == "",
+            Device.carrier_board_id.is_(None),
+        ),
+    ).count()
+
+    combo_rows = db.query(Device.compute_module, Device.carrier_board_id).filter(
+        Device.application_group_id == group.id,
+        Device.claimed == True,
+        Device.compute_module.isnot(None),
+        Device.compute_module != "",
+        Device.carrier_board_id.isnot(None),
+    ).distinct().all()
+
+    required_combos = [
+        {"compute_module": compute_module, "carrier_board_id": carrier_board_id}
+        for compute_module, carrier_board_id in combo_rows
+    ]
+
+    if unknown_hardware_count > 0:
+        return {
+            "group_id": group.id,
+            "firmware_name": normalized_name,
+            "firmware_version": normalized_version,
+            "status": "Preparing",
+            "ready": False,
+            "required_combos": required_combos,
+            "missing_combos": required_combos,
+            "unknown_hardware_count": unknown_hardware_count,
+        }
+
+    if not required_combos:
+        return {
+            "group_id": group.id,
+            "firmware_name": normalized_name,
+            "firmware_version": normalized_version,
+            "status": "Preparing",
+            "ready": False,
+            "required_combos": [],
+            "missing_combos": [],
+            "unknown_hardware_count": 0,
+        }
+
+    if not normalized_name or not normalized_version:
+        return {
+            "group_id": group.id,
+            "firmware_name": normalized_name,
+            "firmware_version": normalized_version,
+            "status": "Preparing",
+            "ready": False,
+            "required_combos": required_combos,
+            "missing_combos": required_combos,
+            "unknown_hardware_count": 0,
+        }
+
+    missing_combos = []
+    for combo in required_combos:
+        has_payload = db.query(FirmwareRelease.id).filter(
+            FirmwareRelease.firmware_name == normalized_name,
+            FirmwareRelease.firmware_version == normalized_version,
+            FirmwareRelease.compute_module == combo["compute_module"],
+            FirmwareRelease.carrier_board_id == combo["carrier_board_id"],
+        ).first()
+        if not has_payload:
+            missing_combos.append(combo)
+
+    return {
+        "group_id": group.id,
+        "firmware_name": normalized_name,
+        "firmware_version": normalized_version,
+        "status": "Ready" if not missing_combos else "Preparing",
+        "ready": len(missing_combos) == 0,
+        "required_combos": required_combos,
+        "missing_combos": missing_combos,
+        "unknown_hardware_count": 0,
+    }
+
+
 # =============================================================================
 # Request Schemas
 # =============================================================================
@@ -529,6 +634,51 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     carrier_boards = db.query(CarrierBoard).order_by(CarrierBoard.name.asc()).all()
     application_groups = db.query(ApplicationGroup).order_by(ApplicationGroup.name.asc()).all()
 
+    firmware_versions_by_name: dict[str, list[str]] = {}
+    all_release_rows = db.query(FirmwareRelease).order_by(FirmwareRelease.id.desc()).all()
+    for release in all_release_rows:
+        name = _normalize_firmware_name(release.firmware_name)
+        version = _normalize_firmware_version(release.firmware_version)
+        if not name or not version:
+            continue
+        if name not in firmware_versions_by_name:
+            firmware_versions_by_name[name] = []
+        if version not in firmware_versions_by_name[name]:
+            firmware_versions_by_name[name].append(version)
+
+    for name, versions in firmware_versions_by_name.items():
+        firmware_versions_by_name[name] = sorted(
+            versions,
+            key=lambda value: parse_version(value),
+            reverse=True,
+        )
+
+    firmware_names = sorted(firmware_versions_by_name.keys(), key=lambda value: value.lower())
+
+    staging_rows = []
+    for group in application_groups:
+        current_target_name = _normalize_firmware_name(group.target_firmware_name)
+        current_target_version = _normalize_firmware_version(group.target_firmware_version)
+        if group.target_release:
+            if not current_target_name:
+                current_target_name = _normalize_firmware_name(group.target_release.firmware_name)
+            if not current_target_version:
+                current_target_version = _normalize_firmware_version(group.target_release.firmware_version)
+
+        staged_firmware_name = current_target_name or (firmware_names[0] if firmware_names else "")
+        available_versions = firmware_versions_by_name.get(staged_firmware_name, [])
+        staged_firmware_version = current_target_version or (available_versions[0] if available_versions else "")
+        readiness = _evaluate_group_readiness(group, staged_firmware_name, staged_firmware_version, db)
+
+        staging_rows.append({
+            "group": group,
+            "current_target_firmware_name": current_target_name,
+            "current_target_firmware_version": current_target_version,
+            "staged_firmware_name": staged_firmware_name,
+            "staged_firmware_version": staged_firmware_version,
+            "readiness": readiness,
+        })
+
     allowed_emails  = db.query(AllowedEmail).order_by(AllowedEmail.created_at).all()  if user_info.role == UserRole.Admin else []
     allowed_domains = db.query(AllowedDomain).order_by(AllowedDomain.created_at).all() if user_info.role == UserRole.Admin else []
     admin_api_tokens = db.query(APIKey).join(User).order_by(APIKey.created_at.desc()).all() if user_info.role == UserRole.Admin else []
@@ -547,6 +697,9 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             "new_key":         new_key,
             "carrier_boards":  carrier_boards,
             "application_groups": application_groups,
+            "firmware_names": firmware_names,
+            "firmware_versions_by_name": firmware_versions_by_name,
+            "staging_rows": staging_rows,
             "scope_options":   scope_options,
             "fleet_nodes":     fleet_nodes,
             "unclaimed_devices": unclaimed_rows,
@@ -807,16 +960,17 @@ def delete_key(
 # =============================================================================
 
 @app.post("/admin/upload-firmware", status_code=201)
+@app.post("/api/upload-firmware", status_code=201)
 def upload_firmware_m2m(
     request:           Request,
     file:              UploadFile,
+    firmware_name:     str = Form(...),
+    firmware_version:  Optional[str] = Form(None),
     version:           Optional[str] = Form(None),
     version_string:    Optional[str] = Form(None),
-    release_train:     str = Form(...),
     compute_module:    str = Form(...),
     carrier_board_id:  int = Form(...),
     scope:             str = Form(...),
-    set_as_latest:     bool = Form(False),
     db:                Session = Depends(get_db),
     admin_actor:       User = Depends(require_admin_actor),
 ):
@@ -841,16 +995,37 @@ def upload_firmware_m2m(
     if not carrier_board:
         raise HTTPException(status_code=404, detail=f"CarrierBoard id={carrier_board_id} not found.")
 
-    raw_version = version_string or version
+    firmware_name_clean = _sanitize_field(firmware_name)
+    if not firmware_name_clean:
+        raise HTTPException(status_code=400, detail="Invalid firmware name.")
+
+    raw_version = firmware_version or version_string or version
     if not raw_version:
-        raise HTTPException(status_code=400, detail="Missing version string.")
+        raise HTTPException(status_code=400, detail="Missing firmware_version.")
+
+    compute_module_clean = (compute_module or "").strip()
+    if not compute_module_clean:
+        raise HTTPException(status_code=400, detail="Missing compute_module.")
 
     version_clean = _sanitize_field(raw_version, allow_dots=True)
+    compute_module_slug = _sanitize_field(compute_module_clean)
+    firmware_name_slug = _sanitize_field(firmware_name_clean)
     carrier_board_slug  = _sanitize_field(carrier_board.name)
     if not version_clean:
         raise HTTPException(status_code=400, detail="Invalid version string.")
+    if not compute_module_slug:
+        raise HTTPException(status_code=400, detail="Invalid compute_module.")
 
-    filename  = f"{carrier_board_slug}_{version_clean}.bin"
+    existing_release = db.query(FirmwareRelease.id).filter(
+        FirmwareRelease.firmware_name == firmware_name_clean,
+        FirmwareRelease.firmware_version == version_clean,
+        FirmwareRelease.compute_module == compute_module_clean,
+        FirmwareRelease.carrier_board_id == carrier_board_id,
+    ).first()
+    if existing_release:
+        raise HTTPException(status_code=409, detail="Firmware target already exists. Bump FIRMWARE_VERSION.")
+
+    filename  = f"{carrier_board_slug}_{compute_module_slug}_{firmware_name_slug}_{version_clean}.bin"
     file_path = os.path.join(FIRMWARE_DIR, filename)
 
     if not os.path.realpath(file_path).startswith(os.path.realpath(FIRMWARE_DIR)):
@@ -861,25 +1036,29 @@ def upload_firmware_m2m(
         buf.write(content)
 
     release = FirmwareRelease(
-        version=version_clean,
+        firmware_name=firmware_name_clean,
+        firmware_version=version_clean,
         file_path=file_path,
-        release_train=release_train,
-        compute_module=compute_module,
+        compute_module=compute_module_clean,
         carrier_board_id=carrier_board_id,
     )
     db.add(release)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Firmware target already exists. Bump FIRMWARE_VERSION.")
     db.refresh(release)
 
     return JSONResponse(status_code=201, content={
         "message":             "Firmware release created.",
         "firmware_release_id": release.id,
-        "version":             release.version,
+        "firmware_name":       release.firmware_name,
+        "firmware_version":    release.firmware_version,
         "carrier_board":       carrier_board.name,
         "scope":               scope_slug,
         "filename":            filename,
         "uploaded_by":         uploader_email,
-        "set_as_latest":       bool(set_as_latest),
     })
 
 
@@ -891,8 +1070,10 @@ def upload_firmware_m2m(
 def upload_firmware_web(
     request:           Request,
     file:              UploadFile,
-    version:           str = Form(...),
-    release_train:     str = Form(...),
+    firmware_name:     str = Form(...),
+    firmware_version:  Optional[str] = Form(None),
+    version_string:    Optional[str] = Form(None),
+    version:           Optional[str] = Form(None),
     compute_module:    str = Form(...),
     carrier_board_id:  int = Form(...),
     db:                Session = Depends(get_db),
@@ -914,12 +1095,37 @@ def upload_firmware_web(
     if not carrier_board:
         raise HTTPException(status_code=404, detail=f"CarrierBoard id={carrier_board_id} not found.")
 
-    version_clean = _sanitize_field(version, allow_dots=True)
+    firmware_name_clean = _sanitize_field(firmware_name)
+    if not firmware_name_clean:
+        raise HTTPException(status_code=400, detail="Invalid firmware name.")
+
+    raw_version = firmware_version or version_string or version
+    if not raw_version:
+        raise HTTPException(status_code=400, detail="Missing firmware_version.")
+
+    compute_module_clean = (compute_module or "").strip()
+    if not compute_module_clean:
+        raise HTTPException(status_code=400, detail="Missing compute_module.")
+
+    version_clean = _sanitize_field(raw_version, allow_dots=True)
+    compute_module_slug = _sanitize_field(compute_module_clean)
+    firmware_name_slug = _sanitize_field(firmware_name_clean)
     carrier_board_slug  = _sanitize_field(carrier_board.name)
     if not version_clean:
         raise HTTPException(status_code=400, detail="Invalid version string.")
+    if not compute_module_slug:
+        raise HTTPException(status_code=400, detail="Invalid compute_module.")
 
-    filename  = f"{carrier_board_slug}_{version_clean}.bin"
+    existing_release = db.query(FirmwareRelease.id).filter(
+        FirmwareRelease.firmware_name == firmware_name_clean,
+        FirmwareRelease.firmware_version == version_clean,
+        FirmwareRelease.compute_module == compute_module_clean,
+        FirmwareRelease.carrier_board_id == carrier_board_id,
+    ).first()
+    if existing_release:
+        raise HTTPException(status_code=409, detail="Firmware target already exists. Bump FIRMWARE_VERSION.")
+
+    filename  = f"{carrier_board_slug}_{compute_module_slug}_{firmware_name_slug}_{version_clean}.bin"
     file_path = os.path.join(FIRMWARE_DIR, filename)
 
     # Path-traversal guard.
@@ -931,14 +1137,18 @@ def upload_firmware_web(
         buf.write(content)
 
     release = FirmwareRelease(
-        version=version_clean,
+        firmware_name=firmware_name_clean,
+        firmware_version=version_clean,
         file_path=file_path,
-        release_train=release_train,
-        compute_module=compute_module,
+        compute_module=compute_module_clean,
         carrier_board_id=carrier_board_id,
     )
     db.add(release)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Firmware target already exists. Bump FIRMWARE_VERSION.")
 
     return JSONResponse(status_code=201, content={"message": "Firmware upload successful."})
 
@@ -951,10 +1161,10 @@ def upload_firmware_web(
 def check_update(
     x_device_mac:       Optional[str] = Header(default=None),
     x_device_secret:    Optional[str] = Header(default=None),
+    x_firmware_name:    Optional[str] = Header(default=None),
     x_firmware_version: Optional[str] = Header(default=None),
     x_device_battery:   Optional[str] = Header(default=None),
     x_compute_module:   Optional[str] = Header(default=None),
-    x_release_train:    Optional[str] = Header(default=None),
     db:                 Session        = Depends(get_db),
 ):
     if not all([x_device_mac, x_device_secret, x_firmware_version]):
@@ -1001,35 +1211,55 @@ def check_update(
     db.commit()
 
     # ── Step 4: Cascading Resolution ──────────────────────────────────────
-    if not x_release_train:
-        return Response(status_code=204) # Device doesn't know what it needs yet
+    target_firmware_name = ""
+    target_firmware_version = ""
+    if device.application_group:
+        target_firmware_name = _normalize_firmware_name(device.application_group.target_firmware_name)
+        target_firmware_version = _normalize_firmware_version(device.application_group.target_firmware_version)
+        if device.application_group.target_release:
+            if not target_firmware_name:
+                target_firmware_name = _normalize_firmware_name(device.application_group.target_release.firmware_name)
+            if not target_firmware_version:
+                target_firmware_version = _normalize_firmware_version(device.application_group.target_release.firmware_version)
+
+    if not target_firmware_name:
+        target_firmware_name = _normalize_firmware_name(x_firmware_name)
+
+    if not target_firmware_name:
+        return Response(status_code=204)
+
+    if not device.compute_module or device.carrier_board_id is None:
+        return Response(status_code=204)
 
     # Meticulous matching against the socketed hardware combination
-    resolved_release = db.query(FirmwareRelease).filter(
-        FirmwareRelease.release_train == x_release_train,
+    release_query = db.query(FirmwareRelease).filter(
+        FirmwareRelease.firmware_name == target_firmware_name,
         FirmwareRelease.compute_module == device.compute_module,
-        FirmwareRelease.carrier_board_id == device.carrier_board_id
-    ).order_by(FirmwareRelease.id.desc()).first()
+        FirmwareRelease.carrier_board_id == device.carrier_board_id,
+    )
+    if target_firmware_version:
+        release_query = release_query.filter(FirmwareRelease.firmware_version == target_firmware_version)
+    resolved_release = release_query.order_by(FirmwareRelease.id.desc()).first()
 
     # ── Step 5: Deployment decision ───────────────────────────────────────
     if resolved_release is None:
         return Response(status_code=204)
 
-    if not is_newer_version(resolved_release.version, x_firmware_version):
+    if not is_newer_version(resolved_release.firmware_version, x_firmware_version):
         return Response(status_code=204)
 
     if not os.path.exists(resolved_release.file_path):
         print(f"WARNING: FirmwareRelease id={resolved_release.id} file missing: {resolved_release.file_path}")
         return Response(status_code=204)
 
-    device.last_ota_status = f"update_dispatched:{resolved_release.version}"
+    device.last_ota_status = f"update_dispatched:{resolved_release.firmware_name}:{resolved_release.firmware_version}"
     db.commit()
 
     return FileResponse(
         resolved_release.file_path,
         media_type="application/octet-stream",
         filename=os.path.basename(resolved_release.file_path),
-        headers={"X-Firmware-Version": resolved_release.version},
+        headers={"X-Firmware-Version": resolved_release.firmware_version},
     )
 
 
@@ -1159,25 +1389,63 @@ def update_fleet_device(
     return RedirectResponse(url="/dashboard?tab=devices", status_code=status.HTTP_303_SEE_OTHER)
 
 
-@app.post("/admin/deploy")
-def deploy_firmware_to_group(
-    firmware_id: int = Form(...),
-    application_group_id: int = Form(...),
+@app.get("/api/groups/{group_id}/readiness")
+def get_group_readiness(
+    group_id: int,
+    firmware_name: str,
+    firmware_version: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    group = db.query(ApplicationGroup).filter(ApplicationGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Application group not found.")
+
+    if current_user.role != UserRole.Admin and group.team not in current_user.teams:
+        raise HTTPException(status_code=403, detail="You do not have permission to inspect this group.")
+
+    return _evaluate_group_readiness(group, firmware_name, firmware_version, db)
+
+
+@app.post("/api/deploy")
+def deploy_firmware_target_to_group(
+    group_id: int = Form(...),
+    firmware_name: str = Form(...),
+    firmware_version: str = Form(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin_user),
 ):
     _ = current_user
-    release = db.query(FirmwareRelease).filter(FirmwareRelease.id == firmware_id).first()
-    if not release:
-        raise HTTPException(status_code=404, detail="Firmware release not found.")
-
-    group = db.query(ApplicationGroup).filter(ApplicationGroup.id == application_group_id).first()
+    group = db.query(ApplicationGroup).filter(ApplicationGroup.id == group_id).first()
     if not group:
         raise HTTPException(status_code=404, detail="Application group not found.")
 
-    group.target_release_id = release.id
+    normalized_name = _normalize_firmware_name(firmware_name)
+    normalized_version = _normalize_firmware_version(firmware_version)
+    if not normalized_name or not normalized_version:
+        raise HTTPException(status_code=400, detail="firmware_name and firmware_version are required.")
+
+    readiness = _evaluate_group_readiness(group, normalized_name, normalized_version, db)
+    if not readiness["ready"]:
+        raise HTTPException(status_code=400, detail="Firmware target is not ready for this group.")
+
+    group.target_firmware_name = normalized_name
+    group.target_firmware_version = normalized_version
+
+    # Legacy bridge for views still keyed by target_release_id.
+    newest_matching_release = db.query(FirmwareRelease).filter(
+        FirmwareRelease.firmware_name == normalized_name,
+        FirmwareRelease.firmware_version == normalized_version,
+    ).order_by(FirmwareRelease.id.desc()).first()
+    group.target_release_id = newest_matching_release.id if newest_matching_release else None
+
     db.commit()
-    return RedirectResponse(url="/dashboard?tab=deploy", status_code=status.HTTP_303_SEE_OTHER)
+    return {
+        "message": "Firmware target deployed to group.",
+        "group_id": group.id,
+        "firmware_name": normalized_name,
+        "firmware_version": normalized_version,
+    }
 
 
 @app.post("/api/fleet/unclaim/{mac}")
