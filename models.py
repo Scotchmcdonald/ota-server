@@ -143,8 +143,8 @@ class Firmware(Base):
 
 class CarrierBoard(Base):
     """
-    Describes a specific hardware variant (chip + peripherals).
-    Firmware is bound to a profile at upload time, preventing cross-profile deploys.
+    Describes a specific carrier PCB that an ESP32 compute module plugs into.
+    Firmware is bound to a carrier PCB at upload time, preventing cross-profile deploys.
     """
     __tablename__ = "carrier_boards"
 
@@ -154,6 +154,18 @@ class CarrierBoard(Base):
 
     firmware_releases = relationship("FirmwareRelease", back_populates="carrier_board")
     devices = relationship("Device", back_populates="carrier_board")
+
+
+class ComputeModule(Base):
+    """
+    A managed list of ESP32 compute module architectures (e.g. ESP32-S3-WROOM-1).
+    Populated automatically from firmware uploads and managed manually by admins.
+    Removal is blocked if any device or firmware release references the value.
+    """
+    __tablename__ = "compute_modules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False, index=True)  # e.g. "ESP32-S3-WROOM-1"
 
 
 class FirmwareRelease(Base):

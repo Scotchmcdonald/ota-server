@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy import create_engine, event, text, and_, or_, false
 from sqlalchemy.exc import IntegrityError
 from starlette.middleware.sessions import SessionMiddleware
-from models import Base, User, Team, APIKey, Device, Firmware, Label, UserRole, ScopeType, CarrierBoard, FirmwareRelease, ApplicationGroup, AllowedEmail, AllowedDomain
+from models import Base, User, Team, APIKey, Device, Firmware, Label, UserRole, ScopeType, CarrierBoard, ComputeModule, FirmwareRelease, ApplicationGroup, AllowedEmail, AllowedDomain
 from auth import (
     oauth, hash_api_key, get_current_user_from_db, verify_api_key,
     get_current_user_scopes, verify_api_key_scope_access
@@ -163,6 +163,23 @@ def _migrate_legacy_sqlite_schema() -> None:
         if "owner_id" in api_key_columns:
             conn.execute(text("UPDATE api_keys SET user_id = owner_id WHERE user_id IS NULL"))
             conn.execute(text("UPDATE api_keys SET owner_id = user_id WHERE owner_id IS NULL"))
+
+        # Backfill compute_modules table from distinct firmware_releases.compute_module values.
+        # Base.metadata.create_all() ensures the table exists for new deployments.
+        # For continuity, seed any pre-existing firmware release compute module strings.
+        existing_cm_names = {
+            row[0] for row in conn.execute(text("SELECT name FROM compute_modules")).fetchall()
+        }
+        distinct_cm_rows = conn.execute(
+            text("SELECT DISTINCT compute_module FROM firmware_releases WHERE compute_module IS NOT NULL AND compute_module != ''")
+        ).fetchall()
+        for row in distinct_cm_rows:
+            cm_name = (row[0] or "").strip()
+            if cm_name and cm_name not in existing_cm_names:
+                conn.execute(
+                    text("INSERT OR IGNORE INTO compute_modules (name) VALUES (:name)"),
+                    {"name": cm_name},
+                )
 
 
 _migrate_legacy_sqlite_schema()
@@ -688,6 +705,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     new_key  = request.session.pop("new_key_flash", None)
     new_key_token_id = request.session.pop("new_key_token_id_flash", None)
     carrier_boards = db.query(CarrierBoard).order_by(CarrierBoard.name.asc()).all()
+    compute_modules = db.query(ComputeModule).order_by(ComputeModule.name.asc()).all()
     application_groups = db.query(ApplicationGroup).order_by(ApplicationGroup.name.asc()).all()
 
     firmware_versions_by_name: dict[str, list[str]] = {}
@@ -753,6 +771,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             "new_key":         new_key,
             "new_key_token_id": new_key_token_id,
             "carrier_boards":  carrier_boards,
+            "compute_modules": compute_modules,
             "application_groups": application_groups,
             "firmware_names": firmware_names,
             "firmware_versions_by_name": firmware_versions_by_name,
@@ -1003,6 +1022,47 @@ def admin_delete_hardware_profile(
     return RedirectResponse(url="/dashboard?top=hardware", status_code=status.HTTP_303_SEE_OTHER)
 
 
+@app.post("/admin/compute-modules/add")
+def admin_add_compute_module(
+    name: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin_user),
+):
+    _ = current_user
+    normalized = name.strip()
+    if not normalized:
+        raise HTTPException(status_code=400, detail="Compute module name is required.")
+    if db.query(ComputeModule).filter(ComputeModule.name == normalized).first():
+        raise HTTPException(status_code=409, detail="Compute module already exists.")
+    db.add(ComputeModule(name=normalized))
+    db.commit()
+    return RedirectResponse(url="/dashboard?top=hardware", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.post("/admin/compute-modules/delete/{module_id}")
+def admin_delete_compute_module(
+    module_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin_user),
+):
+    _ = current_user
+    module = db.query(ComputeModule).filter(ComputeModule.id == module_id).first()
+    if not module:
+        raise HTTPException(status_code=404, detail="Compute module not found.")
+
+    in_use_by_device = db.query(Device.id).filter(Device.compute_module == module.name).first()
+    in_use_by_release = db.query(FirmwareRelease.id).filter(FirmwareRelease.compute_module == module.name).first()
+    if in_use_by_device or in_use_by_release:
+        raise HTTPException(
+            status_code=400,
+            detail="Compute module is actively enrolled by one or more devices or firmware releases and cannot be removed.",
+        )
+
+    db.delete(module)
+    db.commit()
+    return RedirectResponse(url="/dashboard?top=hardware", status_code=status.HTTP_303_SEE_OTHER)
+
+
 # =============================================================================
 # API Key Management (OAuth-protected)
 # =============================================================================
@@ -1168,6 +1228,14 @@ def upload_firmware_m2m(
         raise HTTPException(status_code=409, detail="Firmware target already exists. Bump FIRMWARE_VERSION.")
     db.refresh(release)
 
+    # Auto-register compute module in managed list if not already present.
+    if not db.query(ComputeModule).filter(ComputeModule.name == compute_module_clean).first():
+        db.add(ComputeModule(name=compute_module_clean))
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+
     return JSONResponse(status_code=201, content={
         "message":             "Firmware release created.",
         "firmware_release_id": release.id,
@@ -1267,6 +1335,14 @@ def upload_firmware_web(
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=409, detail="Firmware target already exists. Bump FIRMWARE_VERSION.")
+
+    # Auto-register compute module in managed list if not already present.
+    if not db.query(ComputeModule).filter(ComputeModule.name == compute_module_clean).first():
+        db.add(ComputeModule(name=compute_module_clean))
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
 
     return JSONResponse(status_code=201, content={"message": "Firmware upload successful."})
 

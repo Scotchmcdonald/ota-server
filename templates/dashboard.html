@@ -138,7 +138,14 @@
                     <p class="text-sm text-slate-500 font-mono mt-1">Validate hardware coverage per group before promoting a firmware target</p>
                 </div>
 
-                <span class="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Readiness matrix for controlled rollout</span>
+                <div class="flex items-center gap-3">
+                    <label for="staging-context-filter" class="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Context</label>
+                    <select id="staging-context-filter" class="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-md px-3 py-1.5 focus:ring-1 focus:ring-emerald-500 outline-none">
+                        <option value="all">All</option>
+                        <option value="personal">Personal</option>
+                        <option value="teams">Teams</option>
+                    </select>
+                </div>
             </div>
 
             <div class="glass-panel overflow-hidden rounded-xl shadow-2xl border-t border-t-emerald-500/30">
@@ -154,7 +161,7 @@
                     </thead>
                     <tbody class="divide-y divide-slate-800/50 bg-slate-900/20 text-sm">
                         {% for row in staging_rows %}
-                        <tr class="hover:bg-slate-800/40 transition-colors staging-row" data-group-id="{{ row.group.id }}">
+                        <tr class="hover:bg-slate-800/40 transition-colors staging-row" data-group-id="{{ row.group.id }}" data-view-context="{{ 'teams' if row.group.team else 'personal' }}">
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <p class="text-slate-200 font-mono text-xs">{{ row.group.name }}</p>
                                 <p class="text-[10px] text-slate-500">{{ row.group.team.name if row.group.team else 'Unassigned Team' }}</p>
@@ -258,7 +265,7 @@
                             <th class="px-6 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Firmware Name</th>
                             <th class="px-6 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Firmware Version</th>
                             <th class="px-6 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Compute Module</th>
-                            <th class="px-6 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Carrier Board</th>
+                            <th class="px-6 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Carrier PCB</th>
                             <th class="px-6 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Uploaded</th>
                         </tr>
                     </thead>
@@ -288,6 +295,15 @@
                     <h2 class="text-2xl font-light text-slate-200">Fleet Control Matrix</h2>
                     <p class="text-sm text-slate-500 font-mono mt-1">Live telemetry with per-node controls and assignment actions</p>
                 </div>
+
+                <div class="flex items-center gap-3">
+                    <label for="fleet-context-filter" class="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Context</label>
+                    <select id="fleet-context-filter" class="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-md px-3 py-1.5 focus:ring-1 focus:ring-sky-500 outline-none">
+                        <option value="all">All</option>
+                        <option value="personal">Personal</option>
+                        <option value="teams">Teams</option>
+                    </select>
+                </div>
             </div>
 
             <div class="glass-panel overflow-hidden rounded-xl shadow-2xl text-sm relative border-t border-t-sky-500/30">
@@ -309,7 +325,7 @@
                             {'mac': 'F0:E1:D2:C3:B4:A5', 'scope': 'Personal', 'scope_slug': 'personal', 'labels': ['testing', 'v1-hw'], 'fw': 'v1.4.1', 'batt': 88, 'status': 'online', 'carrier_board_id': 1, 'firmware_override_id': None},
                             {'mac': '11:22:33:44:55:66', 'scope': 'Team Alpha', 'scope_slug': 'team-alpha', 'labels': ['production'], 'fw': 'v1.4.2', 'batt': 14, 'status': 'offline', 'carrier_board_id': None, 'firmware_override_id': None}
                         ]) %}
-                        <tr class="hover:bg-slate-800/40 transition-colors device-row" data-scope="{{ node.scope_slug|lower }}" data-labels="{{ node.labels|join(',')|lower }}">
+                        <tr class="hover:bg-slate-800/40 transition-colors device-row" data-scope="{{ node.scope_slug|lower }}" data-labels="{{ node.labels|join(',')|lower }}" data-view-context="{{ 'personal' if node.scope_slug == 'personal' else 'teams' }}">
                             <td class="px-6 py-4 whitespace-nowrap text-sky-300 font-mono text-sm tracking-widest">{{ node.mac }}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-slate-400 text-xs uppercase">{{ node.scope }}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-slate-300 font-mono text-xs">
@@ -557,14 +573,16 @@
         <!-- ---------------- ADMIN / HARDWARE ---------------- -->
         <section id="panel-admin-hardware" class="content-panel space-y-6" data-top="hardware">
             <div class="border-b border-emerald-900/50 pb-4">
-                <h2 class="text-2xl font-light text-emerald-100">Carrier Boards</h2>
-                <p class="text-sm text-emerald-400/70 font-mono mt-1">Manage hardware profiles used by devices and firmware releases</p>
+                <h2 class="text-2xl font-light text-emerald-100">Hardware Profiles</h2>
+                <p class="text-sm text-emerald-400/70 font-mono mt-1">Manage carrier PCBs and compute module architectures used by devices and firmware</p>
             </div>
 
+            <!-- Carrier PCBs -->
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {% if db_user and db_user.role.value == 'Admin' %}
                 <div class="glass-panel p-6 rounded-xl border-t border-t-emerald-500/30 lg:col-span-1 space-y-4">
-                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest border-b border-slate-700/50 pb-2">Add Carrier Board</h3>
+                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest border-b border-slate-700/50 pb-2">Add Carrier PCB</h3>
+                    <p class="text-[10px] text-slate-500">The PCB your ESP32 compute module plugs into &mdash; connectors, sensors, power rails, etc.</p>
                     <form action="/admin/hardware/add" method="POST" class="space-y-4 admin-guard-form" data-success-redirect="/dashboard?top=hardware">
                         <div>
                             <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Name</label>
@@ -572,15 +590,15 @@
                         </div>
                         <div>
                             <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Description</label>
-                            <textarea name="description" rows="3" placeholder="Board profile, peripherals, and notes" class="w-full bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-slate-200"></textarea>
+                            <textarea name="description" rows="3" placeholder="Peripherals, connectors, power notes" class="w-full bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-slate-200"></textarea>
                         </div>
-                        <button type="submit" class="w-full text-xs font-bold tracking-widest uppercase px-4 py-2 rounded bg-emerald-600/80 text-white hover:bg-emerald-500 transition-colors shadow">Add Carrier Board</button>
+                        <button type="submit" class="w-full text-xs font-bold tracking-widest uppercase px-4 py-2 rounded bg-emerald-600/80 text-white hover:bg-emerald-500 transition-colors shadow">Add Carrier PCB</button>
                     </form>
                 </div>
                 {% endif %}
 
                 <div class="glass-panel p-6 rounded-xl border-t border-t-sky-500/30 lg:col-span-2 space-y-4">
-                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest border-b border-slate-700/50 pb-2">Registered Carrier Boards</h3>
+                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest border-b border-slate-700/50 pb-2">Registered Carrier PCBs</h3>
                     <div class="space-y-2 max-h-80 overflow-y-auto pr-1">
                         {% for board in carrier_boards %}
                         <div class="flex items-start justify-between gap-3 bg-slate-800/60 border border-slate-700/60 rounded px-3 py-3">
@@ -591,7 +609,7 @@
                             {% if board.name == 'Breadboard' %}
                             <span class="shrink-0 text-[9px] font-bold tracking-wider uppercase text-emerald-300 border border-emerald-700/50 bg-emerald-950/30 px-2 py-1 rounded">Default</span>
                             {% elif db_user and db_user.role.value == 'Admin' %}
-                            <form action="/admin/hardware/delete/{{ board.id }}" method="POST" class="shrink-0 admin-guard-form" data-confirm="Delete carrier board {{ board.name }}?" data-success-redirect="/dashboard?top=hardware">
+                            <form action="/admin/hardware/delete/{{ board.id }}" method="POST" class="shrink-0 admin-guard-form" data-confirm="Delete carrier PCB '{{ board.name }}'?" data-success-redirect="/dashboard?top=hardware">
                                 <button type="submit" class="text-[9px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Delete</button>
                             </form>
                             {% else %}
@@ -599,7 +617,45 @@
                             {% endif %}
                         </div>
                         {% else %}
-                        <p class="text-xs text-slate-600 font-mono py-4 text-center">No carrier boards configured.</p>
+                        <p class="text-xs text-slate-600 font-mono py-4 text-center">No carrier PCBs configured.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Compute Module Architectures -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {% if db_user and db_user.role.value == 'Admin' %}
+                <div class="glass-panel p-6 rounded-xl border-t border-t-violet-500/30 lg:col-span-1 space-y-4">
+                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest border-b border-slate-700/50 pb-2">Add Compute Module</h3>
+                    <p class="text-[10px] text-slate-500">The ESP32 dev board or module that plugs into the carrier PCB &mdash; e.g. ESP32-S3-WROOM-1.</p>
+                    <form action="/admin/compute-modules/add" method="POST" class="space-y-4 admin-guard-form" data-success-redirect="/dashboard?top=hardware">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Module Name</label>
+                            <input type="text" name="name" placeholder="ESP32-S3-WROOM-1" required class="w-full bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-violet-500 focus:border-violet-500 text-slate-200">
+                        </div>
+                        <button type="submit" class="w-full text-xs font-bold tracking-widest uppercase px-4 py-2 rounded bg-violet-600/80 text-white hover:bg-violet-500 transition-colors shadow">Add Compute Module</button>
+                    </form>
+                </div>
+                {% endif %}
+
+                <div class="glass-panel p-6 rounded-xl border-t border-t-violet-500/20 lg:col-span-2 space-y-4">
+                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest border-b border-slate-700/50 pb-2">Registered Compute Modules</h3>
+                    <p class="text-[10px] text-slate-500">Auto-populated from firmware uploads. Modules actively enrolled by devices or firmware releases cannot be removed.</p>
+                    <div class="space-y-2 max-h-80 overflow-y-auto pr-1">
+                        {% for cm in compute_modules %}
+                        <div class="flex items-center justify-between gap-3 bg-slate-800/60 border border-slate-700/60 rounded px-3 py-2">
+                            <p class="text-sm font-mono text-violet-300 truncate">{{ cm.name }}</p>
+                            {% if db_user and db_user.role.value == 'Admin' %}
+                            <form action="/admin/compute-modules/delete/{{ cm.id }}" method="POST" class="shrink-0 admin-guard-form" data-confirm="Remove compute module '{{ cm.name }}'?" data-success-redirect="/dashboard?top=hardware">
+                                <button type="submit" class="text-[9px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Remove</button>
+                            </form>
+                            {% else %}
+                            <span class="shrink-0 text-[9px] font-bold tracking-wider uppercase text-slate-400 border border-slate-700/50 bg-slate-900/40 px-2 py-1 rounded">Read Only</span>
+                            {% endif %}
+                        </div>
+                        {% else %}
+                        <p class="text-xs text-slate-600 font-mono py-4 text-center">No compute modules registered yet. Upload firmware to populate.</p>
                         {% endfor %}
                     </div>
                 </div>
@@ -775,7 +831,7 @@
                 </div>
 
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Carrier Board (Optional)</label>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Carrier PCB (Optional)</label>
                     <select name="carrier_board_id" class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-sky-500 outline-none">
                         <option value="">None (Assign Later)</option>
                         {% for carrier in carrier_boards %}
@@ -826,7 +882,7 @@
                 </div>
 
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Carrier Board</label>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Carrier PCB</label>
                     <select id="manage-device-carrier-board" name="carrier_board_id" class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none">
                         <option value="">None (Unassigned)</option>
                         {% for carrier in carrier_boards %}
@@ -894,11 +950,17 @@
 
                 <div>
                     <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Compute Module Architecture</label>
-                    <input type="text" name="compute_module" placeholder="e.g. ESP32-S3-WROOM-1" required class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-emerald-500 outline-none">
+                    <select name="compute_module" required class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-emerald-500 outline-none">
+                        {% for cm in compute_modules %}
+                        <option value="{{ cm.name }}">{{ cm.name }}</option>
+                        {% else %}
+                        <option value="" disabled selected>No compute modules — add one in Hardware</option>
+                        {% endfor %}
+                    </select>
                 </div>
 
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Carrier Board Integration</label>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Carrier PCB</label>
                     <select name="carrier_board_id" required class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-emerald-500 outline-none">
                         {% for carrier in carrier_boards %}
                         <option value="{{ carrier.id }}">{{ carrier.name }}</option>
@@ -1069,6 +1131,32 @@
         }
 
         initNestedNavigation();
+
+        function filterRowsByContext(rowSelector, filterId) {
+            const filterEl = document.getElementById(filterId);
+            if (!filterEl) return;
+
+            const selected = (filterEl.value || 'all').toLowerCase();
+            const rows = document.querySelectorAll(rowSelector);
+
+            rows.forEach((row) => {
+                const context = (row.dataset.viewContext || 'teams').toLowerCase();
+                const shouldShow = selected === 'all' || context === selected;
+                row.style.display = shouldShow ? '' : 'none';
+            });
+        }
+
+        document.getElementById('staging-context-filter')?.addEventListener('change', () => {
+            filterRowsByContext('.staging-row', 'staging-context-filter');
+        });
+
+        document.getElementById('fleet-context-filter')?.addEventListener('change', () => {
+            filterRowsByContext('.device-row', 'fleet-context-filter');
+        });
+
+        // Initialize filters on first render.
+        filterRowsByContext('.staging-row', 'staging-context-filter');
+        filterRowsByContext('.device-row', 'fleet-context-filter');
 
         // -- Claim Modal Logic ------------------------------
         const claimModal = document.getElementById('claim-modal');
