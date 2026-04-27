@@ -107,6 +107,22 @@ def _migrate_legacy_sqlite_schema() -> None:
         if "firmware_override_id" not in existing_columns:
             conn.execute(text("ALTER TABLE devices ADD COLUMN firmware_override_id INTEGER"))
 
+        firmware_release_table_info = conn.execute(text("PRAGMA table_info(firmware_releases)"))
+        firmware_release_columns = {row[1] for row in firmware_release_table_info.fetchall()}
+
+        if "release_train" not in firmware_release_columns:
+            conn.execute(text("ALTER TABLE firmware_releases ADD COLUMN release_train VARCHAR"))
+        if "compute_module" not in firmware_release_columns:
+            conn.execute(text("ALTER TABLE firmware_releases ADD COLUMN compute_module VARCHAR"))
+        if "carrier_board_id" not in firmware_release_columns:
+            conn.execute(text("ALTER TABLE firmware_releases ADD COLUMN carrier_board_id INTEGER"))
+
+        application_group_table_info = conn.execute(text("PRAGMA table_info(application_groups)"))
+        application_group_columns = {row[1] for row in application_group_table_info.fetchall()}
+
+        if "target_release_id" not in application_group_columns:
+            conn.execute(text("ALTER TABLE application_groups ADD COLUMN target_release_id INTEGER"))
+
         api_key_table_info = conn.execute(text("PRAGMA table_info(api_keys)"))
         api_key_columns = {row[1] for row in api_key_table_info.fetchall()}
 
