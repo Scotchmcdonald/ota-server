@@ -107,13 +107,18 @@ class Device(Base):
     scope_id = Column(Integer, nullable=True, index=True)
     scope_type = Column(Enum(ScopeType), nullable=True, index=True)
 
+    # Socketed Compute Fields
+    compute_module = Column(String, nullable=True)
+    class_name = Column(String, index=True, nullable=True)
+    group_name = Column(String, index=True, nullable=True)
+
     # Cascading OTA Resolution
-    device_profile_id = Column(Integer, ForeignKey("device_profiles.id", ondelete="SET NULL"), nullable=True, index=True)
+    carrier_board_id = Column(Integer, ForeignKey("carrier_boards.id", ondelete="SET NULL"), nullable=True, index=True)
     application_group_id = Column(Integer, ForeignKey("application_groups.id", ondelete="SET NULL"), nullable=True, index=True)
     firmware_override_id = Column(Integer, ForeignKey("firmware_releases.id", ondelete="SET NULL"), nullable=True, index=True)
 
     labels = relationship("Label", secondary=device_label_association, back_populates="devices")
-    device_profile = relationship("DeviceProfile", back_populates="devices", foreign_keys=[device_profile_id])
+    carrier_board = relationship("CarrierBoard", back_populates="devices", foreign_keys=[carrier_board_id])
     application_group = relationship("ApplicationGroup", back_populates="devices", foreign_keys=[application_group_id])
     firmware_override = relationship("FirmwareRelease", foreign_keys=[firmware_override_id])
 
@@ -136,38 +141,42 @@ class Firmware(Base):
 # Hardware Profile & Cascading OTA Models
 # =============================================================================
 
-class DeviceProfile(Base):
+class CarrierBoard(Base):
     """
     Describes a specific hardware variant (chip + peripherals).
     Firmware is bound to a profile at upload time, preventing cross-profile deploys.
     """
-    __tablename__ = "device_profiles"
+    __tablename__ = "carrier_boards"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, nullable=False, index=True)  # e.g. "FeatherS3_EnvSensor"
     tags = Column(JSON, nullable=False, default=list)               # e.g. ["I2C", "BME280", "3.3V"]
 
-    firmware_releases = relationship("FirmwareRelease", back_populates="device_profile")
-    devices = relationship("Device", back_populates="device_profile")
+    firmware_releases = relationship("FirmwareRelease", back_populates="carrier_board")
+    devices = relationship("Device", back_populates="carrier_board")
 
 
 class FirmwareRelease(Base):
     """
-    A versioned firmware binary rigidly associated with one DeviceProfile.
+    A versioned firmware binary rigidly associated with one CarrierBoard.
     This is the authoritative record for any OTA resolution.
     """
     __tablename__ = "firmware_releases"
     __table_args__ = (
-        UniqueConstraint("version", "device_profile_id", name="uq_release_version_profile"),
+        UniqueConstraint("release_train", "compute_module", "carrier_board_id", name="uq_release_target"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
     version = Column(String, nullable=False, index=True)            # e.g. "v2.3.1"
     file_path = Column(String, nullable=False)
-    device_profile_id = Column(Integer, ForeignKey("device_profiles.id"), nullable=False, index=True)
+    
+    release_train = Column(String, nullable=False, index=True)      # e.g. "Sparkle v3.0"
+    compute_module = Column(String, nullable=False, index=True)     # e.g. "ESP32-S3-WROOM-1"
+    carrier_board_id = Column(Integer, ForeignKey("carrier_boards.id"), nullable=False, index=True)
+    
     upload_timestamp = Column(DateTime, default=datetime.utcnow)
 
-    device_profile = relationship("DeviceProfile", back_populates="firmware_releases")
+    carrier_board = relationship("CarrierBoard", back_populates="firmware_releases")
     application_groups = relationship("ApplicationGroup", back_populates="target_release")
 
 

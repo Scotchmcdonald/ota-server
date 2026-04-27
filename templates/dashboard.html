@@ -282,6 +282,7 @@
                         <tr>
                             <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Node Identity</th>
                             <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Scope</th>
+                            <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Hardware Mix</th>
                             <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Labels</th>
                             <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Current FW</th>
                             <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Energy/VBatt</th>
@@ -297,6 +298,9 @@
                         <tr class="hover:bg-slate-800/40 transition-colors device-row" data-scope="{{ node.scope_slug|lower }}" data-labels="{{ node.labels|join(',')|lower }}">
                             <td class="px-6 py-4 whitespace-nowrap text-sky-300 font-mono text-sm tracking-widest">{{ node.mac }}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-slate-400 text-xs uppercase">{{ node.scope }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-slate-300 font-mono text-xs">
+                                [{{ node.compute_module|default('Unknown Compute') }}] on [{{ node.carrier_board.name if node.carrier_board else 'Unassigned Carrier' }}]
+                            </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <div class="flex gap-1.5">
                                     {% for label in node.labels %}
@@ -704,13 +708,23 @@
                 </div>
 
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Hardware Profile</label>
-                    <select name="device_profile_id" id="manage-device-profile" class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Carrier Board</label>
+                    <select name="carrier_board_id" class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none">
                         <option value="">None (Unassigned)</option>
-                        {% for profile in device_profiles|default([{'id': 1, 'name': 'FeatherS3_EnvSensor'}]) %}
-                        <option value="{{ profile.id }}">{{ profile.name }}</option>
+                        {% for carrier in carrier_boards %}
+                        <option value="{{ carrier.id }}">{{ carrier.name }}</option>
                         {% endfor %}
                     </select>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Class</label>
+                    <input type="text" name="class_name" placeholder="e.g. LED Tile" class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Group</label>
+                    <input type="text" name="group_name" placeholder="e.g. North Wall" class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none">
                 </div>
 
                 <div>
@@ -718,7 +732,7 @@
                     <select name="firmware_override_id" id="manage-device-override" class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none">
                         <option value="">None (Follow Fleet Target)</option>
                         {% for fw in firmwares %}
-                        <option value="{{ fw.id }}">#{{ fw.id }} - {{ fw.version }} ({{ fw.device_profile.name if fw.device_profile else 'No Profile' }})</option>
+                        <option value="{{ fw.id }}">#{{ fw.id }} - {{ fw.version }} ({{ fw.carrier_board.name if fw.carrier_board else 'No Profile' }})</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -756,10 +770,20 @@
                 </div>
 
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Hardware Profile</label>
-                    <select name="device_profile_id" required class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-emerald-500 outline-none">
-                        {% for profile in device_profiles|default([{'id': 1, 'name': 'FeatherS3_EnvSensor'}]) %}
-                        <option value="{{ profile.id }}">{{ profile.name }}</option>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Release Train</label>
+                    <input type="text" name="release_train" placeholder="e.g. Sparkle v3.0" required class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-emerald-500 outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Compute Module Architecture</label>
+                    <input type="text" name="compute_module" placeholder="e.g. ESP32-S3-WROOM-1" required class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-emerald-500 outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Carrier Board Integration</label>
+                    <select name="carrier_board_id" required class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-emerald-500 outline-none">
+                        {% for carrier in carrier_boards %}
+                        <option value="{{ carrier.id }}">{{ carrier.name }}</option>
                         {% endfor %}
                     </select>
                 </div>

@@ -787,7 +787,9 @@ def upload_firmware_m2m(
     file:              UploadFile,
     version:           Optional[str] = Form(None),
     version_string:    Optional[str] = Form(None),
-    device_profile_id: int = Form(...),
+    release_train:     str = Form(...),
+    compute_module:    str = Form(...),
+    carrier_board_id:  int = Form(...),
     scope:             str = Form(...),
     set_as_latest:     bool = Form(False),
     db:                Session = Depends(get_db),
@@ -798,7 +800,7 @@ def upload_firmware_m2m(
     - M2M CI/CD uploads via X-Admin-Key header
     - Web dashboard uploads via authenticated session
 
-    Binds binaries to a DeviceProfile, preventing cross-profile deploys.
+    Binds binaries to a CarrierBoard, preventing cross-profile deploys.
     """
     _ = request
     uploader_email = admin_actor.email
@@ -810,20 +812,20 @@ def upload_firmware_m2m(
     if not scope_slug:
         raise HTTPException(status_code=400, detail="Missing scope.")
 
-    profile = db.query(DeviceProfile).filter(DeviceProfile.id == device_profile_id).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail=f"DeviceProfile id={device_profile_id} not found.")
+    carrier_board = db.query(CarrierBoard).filter(CarrierBoard.id == carrier_board_id).first()
+    if not carrier_board:
+        raise HTTPException(status_code=404, detail=f"CarrierBoard id={carrier_board_id} not found.")
 
     raw_version = version_string or version
     if not raw_version:
         raise HTTPException(status_code=400, detail="Missing version string.")
 
     version_clean = _sanitize_field(raw_version, allow_dots=True)
-    profile_slug  = _sanitize_field(profile.name)
+    carrier_board_slug  = _sanitize_field(carrier_board.name)
     if not version_clean:
         raise HTTPException(status_code=400, detail="Invalid version string.")
 
-    filename  = f"{profile_slug}_{version_clean}.bin"
+    filename  = f"{carrier_board_slug}_{version_clean}.bin"
     file_path = os.path.join(FIRMWARE_DIR, filename)
 
     if not os.path.realpath(file_path).startswith(os.path.realpath(FIRMWARE_DIR)):
@@ -836,7 +838,9 @@ def upload_firmware_m2m(
     release = FirmwareRelease(
         version=version_clean,
         file_path=file_path,
-        device_profile_id=device_profile_id,
+        release_train=release_train,
+        compute_module=compute_module,
+        carrier_board_id=carrier_board_id,
     )
     db.add(release)
     db.commit()
@@ -846,7 +850,7 @@ def upload_firmware_m2m(
         "message":             "Firmware release created.",
         "firmware_release_id": release.id,
         "version":             release.version,
-        "device_profile":      profile.name,
+        "carrier_board":       carrier_board.name,
         "scope":               scope_slug,
         "filename":            filename,
         "uploaded_by":         uploader_email,
@@ -863,11 +867,13 @@ def upload_firmware_web(
     request:           Request,
     file:              UploadFile,
     version:           str = Form(...),
-    device_profile_id: int = Form(...),
+    release_train:     str = Form(...),
+    compute_module:    str = Form(...),
+    carrier_board_id:  int = Form(...),
     db:                Session = Depends(get_db),
 ):
     """
-    Upload a firmware binary and rigidly bind it to a DeviceProfile.
+    Upload a firmware binary and rigidly bind it to a CarrierBoard.
     This hard constraint prevents a firmware build compiled for one hardware
     variant from ever being dispatched to a device with a different profile.
     """
@@ -879,16 +885,16 @@ def upload_firmware_web(
         raise HTTPException(status_code=400, detail="Only .bin firmware files are accepted.")
 
     # Validate the target profile exists before writing anything to disk.
-    profile = db.query(DeviceProfile).filter(DeviceProfile.id == device_profile_id).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail=f"DeviceProfile id={device_profile_id} not found.")
+    carrier_board = db.query(CarrierBoard).filter(CarrierBoard.id == carrier_board_id).first()
+    if not carrier_board:
+        raise HTTPException(status_code=404, detail=f"CarrierBoard id={carrier_board_id} not found.")
 
     version_clean = _sanitize_field(version, allow_dots=True)
-    profile_slug  = _sanitize_field(profile.name)
+    carrier_board_slug  = _sanitize_field(carrier_board.name)
     if not version_clean:
         raise HTTPException(status_code=400, detail="Invalid version string.")
 
-    filename  = f"{profile_slug}_{version_clean}.bin"
+    filename  = f"{carrier_board_slug}_{version_clean}.bin"
     file_path = os.path.join(FIRMWARE_DIR, filename)
 
     # Path-traversal guard.
@@ -898,6 +904,18 @@ def upload_firmware_web(
     content = file.file.read()
     with open(file_path, "wb") as buf:
         buf.write(content)
+
+    release = FirmwareRelease(
+        version=version_clean,
+        file_path=file_path,
+        release_train=release_train,
+        compute_module=compute_module,
+        carrier_board_id=carrier_board_id,
+    )
+    db.add(release)
+    db.commit()
+
+    return JSONResponse(status_code=201, content={"message": "Firmware upload successful."})
 
     release = FirmwareRelease(
         version=version_clean,
@@ -927,6 +945,8 @@ def check_update(
     x_device_secret:    Optional[str] = Header(default=None),
     x_firmware_version: Optional[str] = Header(default=None),
     x_device_battery:   Optional[str] = Header(default=None),
+    x_compute_module:   Optional[str] = Header(default=None),
+    x_release_train:    Optional[str] = Header(default=None),
     db:                 Session        = Depends(get_db),
 ):
     if not all([x_device_mac, x_device_secret, x_firmware_version]):
@@ -942,6 +962,7 @@ def check_update(
             secret="pending_claim",
             device_class="unknown",
             version=x_firmware_version,
+            compute_module=x_compute_module,
             claimed=False,
             last_checkin=datetime.utcnow(),
         ))
@@ -962,6 +983,8 @@ def check_update(
     # ── Step 3: Update telemetry ───────────────────────────────────────────
     device.last_checkin = datetime.utcnow()
     device.version = x_firmware_version
+    if x_compute_module:
+        device.compute_module = x_compute_module
     if x_device_battery is not None:
         try:
             device.battery = int(x_device_battery)
@@ -970,30 +993,18 @@ def check_update(
     db.commit()
 
     # ── Step 4: Cascading Resolution ──────────────────────────────────────
-    # Priority 1: per-device developer override pin.
-    resolved_release: Optional[FirmwareRelease] = None
-    if device.firmware_override_id:
-        resolved_release = db.query(FirmwareRelease).filter(
-            FirmwareRelease.id == device.firmware_override_id
-        ).first()
+    if not x_release_train:
+        return Response(status_code=204) # Device doesn't know what it needs yet
 
-    # Priority 2: application group fleet target.
-    if resolved_release is None and device.application_group_id:
-        group = db.query(ApplicationGroup).filter(
-            ApplicationGroup.id == device.application_group_id
-        ).first()
-        if group and group.target_release_id:
-            resolved_release = db.query(FirmwareRelease).filter(
-                FirmwareRelease.id == group.target_release_id
-            ).first()
+    # Meticulous matching against the socketed hardware combination
+    resolved_release = db.query(FirmwareRelease).filter(
+        FirmwareRelease.release_train == x_release_train,
+        FirmwareRelease.compute_module == device.compute_module,
+        FirmwareRelease.carrier_board_id == device.carrier_board_id
+    ).order_by(FirmwareRelease.id.desc()).first()
 
     # ── Step 5: Deployment decision ───────────────────────────────────────
     if resolved_release is None:
-        return Response(status_code=204)
-
-    # CRITICAL: Prevent Cross-Profile Bricking
-    if device.device_profile_id and resolved_release.device_profile_id != device.device_profile_id:
-        print(f"WARNING: Profile mismatch! Device {device.mac_address} blocked from bad OTA.")
         return Response(status_code=204)
 
     if not is_newer_version(resolved_release.version, x_firmware_version):
