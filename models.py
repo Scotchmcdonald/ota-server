@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON, String, Table, Enum, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Table, Enum, UniqueConstraint
 from sqlalchemy.orm import declarative_base, relationship
 import enum
 
@@ -150,7 +150,7 @@ class CarrierBoard(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, nullable=False, index=True)  # e.g. "FeatherS3_EnvSensor"
-    tags = Column(JSON, nullable=False, default=list)               # e.g. ["I2C", "BME280", "3.3V"]
+    description = Column(String, nullable=True)
 
     firmware_releases = relationship("FirmwareRelease", back_populates="carrier_board")
     devices = relationship("Device", back_populates="carrier_board")

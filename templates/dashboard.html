@@ -13,8 +13,10 @@
             border: 1px solid rgba(51, 65, 85, 0.8);
         }
         .header-glow { text-shadow: 0 0 12px rgba(56, 189, 248, 0.5); }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; animation: fadeIn 0.3s ease-out; }
+        .content-panel { display: none; }
+        .content-panel.active { display: block; animation: fadeIn 0.3s ease-out; }
+        .subnav-group { display: none; }
+        .subnav-group.active { display: flex; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         
         /* Custom scrollbar */
@@ -28,26 +30,13 @@
 
     <!-- --------------------------- NAVBAR --------------------------- -->
     <nav class="bg-slate-900/90 backdrop-blur border-b border-slate-800 p-4 sticky top-0 z-50 shadow-2xl">
-        <div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
-            <div class="flex items-center space-x-3">
+        <div class="max-w-7xl mx-auto space-y-4">
+            <div class="flex items-center justify-between gap-4">
+                <div class="flex items-center space-x-3">
                 <svg class="w-8 h-8 text-sky-500 shrink-0 drop-shadow-[0_0_8px_rgba(14,165,233,0.8)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"></path>
                 </svg>
                 <h1 class="text-2xl font-bold tracking-widest text-slate-100 header-glow uppercase">ESP FLEET</h1>
-            </div>
-            
-            <div class="flex items-center gap-6">
-                <!-- TABS (Desktop) -->
-                <div class="hidden md:flex rounded-lg bg-slate-800/50 p-1 border border-slate-700/50" id="desktop-tabs">
-                    <button class="tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-sky-400 bg-slate-700/50 shadow" data-target="tab-onboard">Onboard</button>
-                    <button class="tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-700/30" data-target="tab-deploy">Firmware</button>
-                    <button class="tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-700/30" data-target="tab-devices">Devices</button>
-                    <button class="tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-700/30" data-target="tab-fleet">Fleet</button>
-                    <button class="tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-fuchsia-400 hover:text-fuchsia-200 hover:bg-slate-700/30" data-target="tab-tokens">Tokens</button>
-                    {% if db_user and db_user.role.value == 'Admin' %}
-                    <button class="tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-rose-400 hover:text-rose-200 hover:bg-slate-700/30" data-target="tab-admin">Admin</button>
-                    <button class="tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-amber-400 hover:text-amber-200 hover:bg-slate-700/30" data-target="tab-access">Access</button>
-                    {% endif %}
                 </div>
 
                 <div class="text-slate-400 font-mono text-sm tracking-wide hidden lg:block">
@@ -63,27 +52,45 @@
                     <a href="/logout" class="ml-2 text-[10px] font-bold tracking-wider uppercase text-slate-400 hover:text-rose-400 transition-colors">Log Out</a>
                 </div>
             </div>
-        </div>
-        
-        <!-- TABS (Mobile) -->
-        <div class="md:hidden flex overflow-x-auto mt-4 gap-2 pb-2" id="mobile-tabs">
-            <button class="tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-sky-400 bg-slate-700/50 shadow" data-target="tab-onboard">Onboard</button>
-            <button class="tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-slate-400 bg-slate-800/50" data-target="tab-deploy">Firmware</button>
-            <button class="tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-slate-400 bg-slate-800/50" data-target="tab-devices">Devices</button>
-            <button class="tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-slate-400 bg-slate-800/50" data-target="tab-fleet">Fleet</button>
-            <button class="tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-fuchsia-400 bg-slate-800/50" data-target="tab-tokens">Tokens</button>
-            {% if db_user and db_user.role.value == 'Admin' %}
-            <button class="tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-rose-400 bg-slate-800/50" data-target="tab-admin">Admin</button>
-            <button class="tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all text-amber-400 bg-slate-800/50" data-target="tab-access">Access</button>
-            {% endif %}
+
+            <div class="flex flex-wrap items-center gap-2 border border-slate-700/60 bg-slate-800/40 rounded-xl p-1" id="top-level-nav">
+                <button class="top-tab-btn px-4 py-2 text-xs font-bold tracking-widest uppercase rounded-lg transition-all" data-top="devices">Devices</button>
+                <button class="top-tab-btn px-4 py-2 text-xs font-bold tracking-widest uppercase rounded-lg transition-all" data-top="firmware">Firmware</button>
+                <button class="top-tab-btn px-4 py-2 text-xs font-bold tracking-widest uppercase rounded-lg transition-all" data-top="settings">Settings</button>
+                {% if db_user and db_user.role.value == 'Admin' %}
+                <button class="top-tab-btn px-4 py-2 text-xs font-bold tracking-widest uppercase rounded-lg transition-all" data-top="admin">Admin</button>
+                {% endif %}
+            </div>
+
+            <div class="border border-slate-700/60 bg-slate-800/30 rounded-xl px-3 py-2" id="sub-nav-container">
+                <div class="subnav-group flex-wrap gap-2" data-top="devices">
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="devices" data-sub="fleet">Fleet</button>
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="devices" data-sub="staging">Staging</button>
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="devices" data-sub="onboard">Onboard</button>
+                </div>
+
+                <div class="subnav-group flex-wrap gap-2" data-top="settings">
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="settings" data-sub="profile">My Profile</button>
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="settings" data-sub="tokens">My Tokens</button>
+                </div>
+
+                {% if db_user and db_user.role.value == 'Admin' %}
+                <div class="subnav-group flex-wrap gap-2" data-top="admin">
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="admin" data-sub="teams">Teams</button>
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="admin" data-sub="hardware">Hardware</button>
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="admin" data-sub="access">Access</button>
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="admin" data-sub="root-tokens">Root Tokens</button>
+                </div>
+                {% endif %}
+            </div>
         </div>
     </nav>
 
     <!-- -------------------------- MAIN CONTENT ----------------------- -->
     <main class="flex-grow max-w-7xl mx-auto w-full p-4 sm:p-6 mt-2">
 
-        <!-- ---------------- TAB 1: ONBOARD ---------------- -->
-        <section id="tab-onboard" class="tab-content active space-y-6">
+        <!-- ---------------- DEVICES / ONBOARD ---------------- -->
+        <section id="panel-devices-onboard" class="content-panel space-y-6" data-top="devices" data-sub="onboard">
             <div class="flex justify-between items-end border-b border-slate-800 pb-4">
                 <div>
                     <h2 class="text-2xl font-light text-slate-200">Onboarding</h2>
@@ -129,19 +136,15 @@
             </div>
         </section>
 
-        <!-- ---------------- TAB 2: DEPLOY ---------------- -->
-        <section id="tab-deploy" class="tab-content space-y-6">
+        <!-- ---------------- DEVICES / STAGING ---------------- -->
+        <section id="panel-devices-staging" class="content-panel space-y-6" data-top="devices" data-sub="staging">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-slate-800 pb-4 gap-4">
                 <div>
                     <h2 class="text-2xl font-light text-slate-200">Group Staging</h2>
                     <p class="text-sm text-slate-500 font-mono mt-1">Validate hardware coverage per group before promoting a firmware target</p>
                 </div>
 
-                {% if db_user and db_user.role.value == 'Admin' %}
-                <button type="button" onclick="openUploadModal()" class="px-4 py-1.5 text-xs font-bold tracking-widest uppercase rounded bg-sky-600/20 text-sky-300 border border-sky-500/60 hover:bg-sky-500 hover:text-white hover:shadow-[0_0_15px_rgba(14,165,233,0.35)] transition-all">
-                    Upload Payload
-                </button>
-                {% endif %}
+                <span class="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Readiness matrix for controlled rollout</span>
             </div>
 
             <div class="glass-panel overflow-hidden rounded-xl shadow-2xl border-t border-t-emerald-500/30">
@@ -206,7 +209,7 @@
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-right">
                                 {% if db_user and db_user.role.value == 'Admin' %}
-                                <form action="/api/deploy" method="POST" class="inline-flex items-center admin-guard-form" data-success-redirect="/dashboard?tab=deploy">
+                                <form action="/api/deploy" method="POST" class="inline-flex items-center admin-guard-form" data-success-redirect="/dashboard?top=devices&sub=staging">
                                     <input type="hidden" name="group_id" value="{{ row.group.id }}">
                                     <input type="hidden" name="firmware_name" value="{{ row.staged_firmware_name }}" class="staging-firmware-name-hidden" data-group-id="{{ row.group.id }}">
                                     <input type="hidden" name="firmware_version" value="{{ row.staged_firmware_version }}" class="staging-firmware-version-hidden" data-group-id="{{ row.group.id }}">
@@ -233,7 +236,24 @@
                 </table>
             </div>
 
-            <div class="glass-panel overflow-hidden rounded-xl shadow-2xl">
+        </section>
+
+        <!-- ---------------- FIRMWARE ---------------- -->
+        <section id="panel-firmware" class="content-panel space-y-6" data-top="firmware">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-slate-800 pb-4 gap-4">
+                <div>
+                    <h2 class="text-2xl font-light text-slate-200">Firmware Warehouse</h2>
+                    <p class="text-sm text-slate-500 font-mono mt-1">Binary inventory by firmware identity and hardware compatibility</p>
+                </div>
+
+                {% if db_user and db_user.role.value == 'Admin' %}
+                <button type="button" onclick="openUploadModal()" class="px-4 py-1.5 text-xs font-bold tracking-widest uppercase rounded bg-sky-600/20 text-sky-300 border border-sky-500/60 hover:bg-sky-500 hover:text-white hover:shadow-[0_0_15px_rgba(14,165,233,0.35)] transition-all">
+                    Upload Payload
+                </button>
+                {% endif %}
+            </div>
+
+            <div class="glass-panel overflow-hidden rounded-xl shadow-2xl border-t border-t-emerald-500/30">
                 <div class="px-6 py-4 border-b border-slate-800 bg-slate-900/50">
                     <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest">Payload Catalog</h3>
                     <p class="text-[10px] text-slate-500 font-mono mt-1">Inventory of uploaded payloads by firmware target and hardware tuple</p>
@@ -267,72 +287,12 @@
             </div>
         </section>
 
-        <!-- ---------------- TAB 3: FLEET ---------------- -->
-        <section id="tab-fleet" class="tab-content space-y-6">
+        <!-- ---------------- DEVICES / FLEET ---------------- -->
+        <section id="panel-devices-fleet" class="content-panel space-y-6" data-top="devices" data-sub="fleet">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-slate-800 pb-4 gap-4">
                 <div>
-                    <h2 class="text-2xl font-light text-slate-200">Fleet Assignments</h2>
-                    <p class="text-sm text-slate-500 font-mono mt-1">Set rollout targets per application group for managed fleet segments</p>
-                </div>
-            </div>
-
-            <div class="glass-panel overflow-hidden rounded-xl shadow-2xl text-sm relative border-t border-t-emerald-500/30">
-                <table class="min-w-full divide-y divide-slate-800">
-                    <thead class="bg-slate-900/60">
-                        <tr>
-                            <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Application Group</th>
-                            <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Owning Team</th>
-                            <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Current Target</th>
-                            <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Devices</th>
-                            <th class="px-6 py-4 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-800/50 bg-slate-900/20">
-                        {% for group in application_groups %}
-                        <tr class="hover:bg-slate-800/40 transition-colors">
-                            <td class="px-6 py-4 whitespace-nowrap text-slate-200 font-mono text-xs">{{ group.name }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-slate-400 text-xs">{{ group.team.name if group.team else 'Unassigned' }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-slate-300 text-xs font-mono">
-                                {% if group.target_firmware_name and group.target_firmware_version %}
-                                    {{ group.target_firmware_name }} / {{ group.target_firmware_version }}
-                                {% else %}
-                                    <span class="text-slate-500">No target set</span>
-                                {% endif %}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-slate-400 text-xs font-mono">{{ group.devices|length }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-right">
-                                <span class="text-slate-500 text-[10px] font-mono">Use Group Staging in Firmware tab</span>
-                            </td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="5" class="px-6 py-12 text-center text-slate-500 font-mono text-sm tracking-widest">NO APPLICATION GROUPS FOUND</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <!-- ---------------- TAB 4: DEVICES ---------------- -->
-        <section id="tab-devices" class="tab-content space-y-6">
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-slate-800 pb-4 gap-4">
-                <div>
-                    <h2 class="text-2xl font-light text-slate-200">Device Management</h2>
-                    <p class="text-sm text-slate-500 font-mono mt-1">Manage individual devices, scopes, labels, profiles, and overrides</p>
-                </div>
-                
-                <div class="flex flex-wrap gap-3">
-                    <select id="devices-scope-filter" class="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-md px-3 py-1.5 focus:ring-1 focus:ring-sky-500">
-                        <option value="all">All Scopes</option>
-                        <option value="personal">Personal</option>
-                        <option value="team-alpha">Team Alpha</option>
-                    </select>
-                    <select id="devices-label-filter" class="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-md px-3 py-1.5 focus:ring-1 focus:ring-sky-500">
-                        <option value="all">All Labels</option>
-                        <option value="production">Production</option>
-                        <option value="testing">Testing</option>
-                    </select>
+                    <h2 class="text-2xl font-light text-slate-200">Fleet Control Matrix</h2>
+                    <p class="text-sm text-slate-500 font-mono mt-1">Live telemetry with per-node controls and assignment actions</p>
                 </div>
             </div>
 
@@ -398,7 +358,7 @@
                                     >
                                         Manage
                                     </button>
-                                    <form action="/api/fleet/unclaim/{{ node.mac }}" method="POST" class="admin-guard-form" data-confirm="Unclaim {{ node.mac }}?" data-success-redirect="/dashboard?tab=devices">
+                                    <form action="/api/fleet/unclaim/{{ node.mac }}" method="POST" class="admin-guard-form" data-confirm="Unclaim {{ node.mac }}?" data-success-redirect="/dashboard?top=devices&sub=fleet">
                                         <button type="submit" class="px-2.5 py-1 text-[9px] font-bold tracking-widest uppercase rounded bg-rose-900/40 text-rose-400 border border-rose-700/50 hover:bg-rose-600 hover:text-white transition-all">Unclaim</button>
                                     </form>
                                 </div>
@@ -408,11 +368,42 @@
                     </tbody>
                 </table>
             </div>
+
         </section>
 
-        <!-- ---------------- TAB 5: ADMIN ---------------- -->
+        <!-- ---------------- SETTINGS / PROFILE ---------------- -->
+        <section id="panel-settings-profile" class="content-panel space-y-6" data-top="settings" data-sub="profile">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-slate-800 pb-4 gap-4">
+                <div>
+                    <h2 class="text-2xl font-light text-slate-200">My Profile</h2>
+                    <p class="text-sm text-slate-500 font-mono mt-1">Identity, authorization tier, and team assignments</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="glass-panel p-6 rounded-xl border-t border-t-sky-500/40 lg:col-span-2 space-y-4">
+                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest border-b border-slate-700/50 pb-2">Identity</h3>
+                    <div class="space-y-3 font-mono text-sm">
+                        <p class="text-slate-300">Email: <span class="text-sky-300">{{ user.email if user else 'Unknown' }}</span></p>
+                        <p class="text-slate-300">Role: <span class="text-amber-300">{{ db_user.role.value if db_user and db_user.role else 'User' }}</span></p>
+                    </div>
+                </div>
+                <div class="glass-panel p-6 rounded-xl border-t border-t-emerald-500/40 space-y-4">
+                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest border-b border-slate-700/50 pb-2">Assigned Teams</h3>
+                    <div class="space-y-2">
+                        {% for team in db_user.teams if db_user and db_user.teams %}
+                        <p class="text-xs text-emerald-300 font-mono">{{ team.name }}</p>
+                        {% else %}
+                        <p class="text-xs text-slate-500 font-mono">No team memberships found.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ---------------- ADMIN / TEAMS ---------------- -->
         {% if db_user and db_user.role.value == 'Admin' %}
-        <section id="tab-admin" class="tab-content space-y-6">
+        <section id="panel-admin-teams" class="content-panel space-y-6" data-top="admin" data-sub="teams">
             <div class="border-b border-rose-900/50 pb-4">
                 <h2 class="text-2xl font-light text-rose-100 flex items-center gap-3">
                     <svg class="w-6 h-6 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
@@ -424,7 +415,7 @@
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div class="glass-panel p-6 rounded-xl border-t border-t-rose-500/30">
                     <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest mb-4 border-b border-slate-700/50 pb-2">Create Team</h3>
-                    <form action="/admin/teams/add" method="POST" class="space-y-4 admin-guard-form" data-success-redirect="/dashboard?tab=admin">
+                    <form action="/admin/teams/add" method="POST" class="space-y-4 admin-guard-form" data-success-redirect="/dashboard?top=admin&sub=teams">
                         <div>
                             <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">New Team Name</label>
                             <input type="text" name="team_name" placeholder="Engineering Beta" required class="w-full bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-rose-500 focus:border-rose-500 text-slate-200">
@@ -435,7 +426,7 @@
 
                 <div class="glass-panel p-6 rounded-xl border-t border-t-rose-500/30">
                     <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest mb-4 border-b border-slate-700/50 pb-2">Add User To Team</h3>
-                    <form action="/admin/teams/assign" method="POST" class="space-y-4 admin-guard-form" data-success-redirect="/dashboard?tab=admin">
+                    <form action="/admin/teams/assign" method="POST" class="space-y-4 admin-guard-form" data-success-redirect="/dashboard?top=admin&sub=teams">
                         <div>
                             <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">User</label>
                             <select name="email" required class="w-full bg-slate-800 text-slate-300 text-xs rounded-md border border-slate-700 px-2 py-2 outline-none">
@@ -466,7 +457,7 @@
                                     <p class="text-sm font-semibold text-slate-200">{{ team.name }}</p>
                                     <p class="text-[10px] font-mono text-slate-500">TEAM ID #{{ team.id }}</p>
                                 </div>
-                                <form action="/admin/teams/delete/{{ team.id }}" method="POST" class="admin-guard-form" data-confirm="Delete team {{ team.name }}?" data-success-redirect="/dashboard?tab=admin">
+                                <form action="/admin/teams/delete/{{ team.id }}" method="POST" class="admin-guard-form" data-confirm="Delete team {{ team.name }}?" data-success-redirect="/dashboard?top=admin&sub=teams">
                                     <button type="submit" class="text-[10px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Delete Team</button>
                                 </form>
                             </div>
@@ -478,7 +469,7 @@
                                         <p class="text-xs font-mono text-slate-300 truncate">{{ member.email }}</p>
                                         <p class="text-[10px] text-slate-500 truncate">{{ member.name or 'No profile name' }}</p>
                                     </div>
-                                    <form action="/admin/teams/members/remove" method="POST" class="shrink-0 admin-guard-form" data-success-redirect="/dashboard?tab=admin">
+                                    <form action="/admin/teams/members/remove" method="POST" class="shrink-0 admin-guard-form" data-success-redirect="/dashboard?top=admin&sub=teams">
                                         <input type="hidden" name="team_id" value="{{ team.id }}">
                                         <input type="hidden" name="user_id" value="{{ member.id }}">
                                         <button type="submit" class="text-[9px] font-bold tracking-wider uppercase text-amber-300 hover:text-white border border-amber-900/50 bg-amber-950/30 hover:bg-amber-600 px-2 py-1 rounded transition-all">Remove</button>
@@ -499,8 +490,8 @@
         </section>
         {% endif %}
 
-        <!-- ---------------- TAB 5: TOKENS ---------------- -->
-        <section id="tab-tokens" class="tab-content space-y-6">
+        <!-- ---------------- SETTINGS / TOKENS ---------------- -->
+        <section id="panel-settings-tokens" class="content-panel space-y-6" data-top="settings" data-sub="tokens">
             <div class="border-b border-fuchsia-900/50 pb-4">
                 <h2 class="text-2xl font-light text-fuchsia-100">Personal Access Tokens</h2>
                 <p class="text-sm text-fuchsia-400/70 font-mono mt-1">Manage your own personal access tokens.</p>
@@ -528,7 +519,7 @@
                 </div>
                 {% endif %}
 
-                <form action="/api/tokens/generate" method="POST" class="mb-4" data-success-redirect="/dashboard?tab=tokens">
+                <form action="/api/tokens/generate" method="POST" class="mb-4" data-success-redirect="/dashboard?top=settings&sub=tokens">
                     <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Token Note (Optional)</label>
                     <input type="text" name="label" maxlength="120" placeholder="CI deploy token, OTA automation, local debug" class="w-full mb-3 bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-fuchsia-500 focus:border-fuchsia-500 text-slate-200 placeholder-slate-500 outline-none">
                     <button type="submit" class="w-full flex items-center justify-center gap-2 rounded p-2.5 text-xs font-bold tracking-widest uppercase text-white bg-fuchsia-700/80 hover:bg-fuchsia-600 shadow-[0_0_15px_rgba(192,38,211,0.3)] transition-all">
@@ -553,7 +544,7 @@
                             >
                                 Copy Preview
                             </button>
-                            <form action="/api/tokens/revoke/{{ token.id }}" method="POST" data-confirm="Revoke this token?" data-success-redirect="/dashboard?tab=tokens">
+                            <form action="/api/tokens/revoke/{{ token.id }}" method="POST" data-confirm="Revoke this token?" data-success-redirect="/dashboard?top=settings&sub=tokens">
                                 <button type="submit" class="text-[9px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Revoke</button>
                             </form>
                         </div>
@@ -565,9 +556,59 @@
             </div>
         </section>
 
-        <!-- ---------------- TAB 6: ACCESS ---------------- -->
+        <!-- ---------------- ADMIN / HARDWARE ---------------- -->
         {% if db_user and db_user.role.value == 'Admin' %}
-        <section id="tab-access" class="tab-content space-y-6">
+        <section id="panel-admin-hardware" class="content-panel space-y-6" data-top="admin" data-sub="hardware">
+            <div class="border-b border-emerald-900/50 pb-4">
+                <h2 class="text-2xl font-light text-emerald-100">Carrier Boards</h2>
+                <p class="text-sm text-emerald-400/70 font-mono mt-1">Manage hardware profiles used by devices and firmware releases</p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="glass-panel p-6 rounded-xl border-t border-t-emerald-500/30 lg:col-span-1 space-y-4">
+                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest border-b border-slate-700/50 pb-2">Add Carrier Board</h3>
+                    <form action="/admin/hardware/add" method="POST" class="space-y-4 admin-guard-form" data-success-redirect="/dashboard?top=admin&sub=hardware">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Name</label>
+                            <input type="text" name="name" placeholder="FeatherS3 Rev-A" required class="w-full bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-slate-200">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Description</label>
+                            <textarea name="description" rows="3" placeholder="Board profile, peripherals, and notes" class="w-full bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-slate-200"></textarea>
+                        </div>
+                        <button type="submit" class="w-full text-xs font-bold tracking-widest uppercase px-4 py-2 rounded bg-emerald-600/80 text-white hover:bg-emerald-500 transition-colors shadow">Add Carrier Board</button>
+                    </form>
+                </div>
+
+                <div class="glass-panel p-6 rounded-xl border-t border-t-sky-500/30 lg:col-span-2 space-y-4">
+                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest border-b border-slate-700/50 pb-2">Registered Carrier Boards</h3>
+                    <div class="space-y-2 max-h-80 overflow-y-auto pr-1">
+                        {% for board in carrier_boards %}
+                        <div class="flex items-start justify-between gap-3 bg-slate-800/60 border border-slate-700/60 rounded px-3 py-3">
+                            <div class="min-w-0">
+                                <p class="text-sm font-mono text-sky-300 truncate">{{ board.name }}</p>
+                                <p class="text-[10px] text-slate-500 mt-1">{{ board.description or 'No description' }}</p>
+                            </div>
+                            {% if board.name == 'Breadboard' %}
+                            <span class="shrink-0 text-[9px] font-bold tracking-wider uppercase text-emerald-300 border border-emerald-700/50 bg-emerald-950/30 px-2 py-1 rounded">Default</span>
+                            {% else %}
+                            <form action="/admin/hardware/delete/{{ board.id }}" method="POST" class="shrink-0 admin-guard-form" data-confirm="Delete carrier board {{ board.name }}?" data-success-redirect="/dashboard?top=admin&sub=hardware">
+                                <button type="submit" class="text-[9px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Delete</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                        {% else %}
+                        <p class="text-xs text-slate-600 font-mono py-4 text-center">No carrier boards configured.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </section>
+        {% endif %}
+
+        <!-- ---------------- ADMIN / ACCESS ---------------- -->
+        {% if db_user and db_user.role.value == 'Admin' %}
+        <section id="panel-admin-access" class="content-panel space-y-6" data-top="admin" data-sub="access">
             <div class="border-b border-amber-900/50 pb-4">
                 <h2 class="text-2xl font-light text-amber-100 flex items-center gap-3">
                     <svg class="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
@@ -582,7 +623,7 @@
                 <div class="glass-panel p-6 rounded-xl border-t border-t-amber-500/30 space-y-4">
                     <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest border-b border-slate-700/50 pb-2">Permitted Email Addresses</h3>
 
-                    <form action="/admin/access/emails/add" method="POST" class="flex gap-2 flex-wrap admin-guard-form" data-success-redirect="/dashboard?tab=access">
+                    <form action="/admin/access/emails/add" method="POST" class="flex gap-2 flex-wrap admin-guard-form" data-success-redirect="/dashboard?top=admin&sub=access">
                         <input type="email" name="email" placeholder="operator@company.com" required
                             class="flex-1 min-w-0 bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-slate-200 placeholder-slate-500 outline-none">
                         <input type="text" name="note" placeholder="Note (optional)"
@@ -597,7 +638,7 @@
                                 <p class="text-xs font-mono text-amber-300 truncate">{{ entry.email }}</p>
                                 {% if entry.note %}<p class="text-[10px] text-slate-500 truncate">{{ entry.note }}</p>{% endif %}
                             </div>
-                            <form action="/admin/access/emails/delete/{{ entry.id }}" method="POST" class="shrink-0 admin-guard-form" data-success-redirect="/dashboard?tab=access">
+                            <form action="/admin/access/emails/delete/{{ entry.id }}" method="POST" class="shrink-0 admin-guard-form" data-success-redirect="/dashboard?top=admin&sub=access">
                                 <button type="submit" class="text-[9px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Remove</button>
                             </form>
                         </div>
@@ -612,7 +653,7 @@
                     <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest border-b border-slate-700/50 pb-2">Permitted Domains (Wildcard)</h3>
                     <p class="text-[10px] text-slate-500 font-mono">Any <span class="text-sky-400">@domain</span> match grants access. Use carefully.</p>
 
-                    <form action="/admin/access/domains/add" method="POST" class="flex gap-2 flex-wrap admin-guard-form" data-success-redirect="/dashboard?tab=access">
+                    <form action="/admin/access/domains/add" method="POST" class="flex gap-2 flex-wrap admin-guard-form" data-success-redirect="/dashboard?top=admin&sub=access">
                         <input type="text" name="domain" placeholder="borealtek.ca" required
                             class="flex-1 min-w-0 bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-sky-500 focus:border-sky-500 text-slate-200 placeholder-slate-500 outline-none">
                         <input type="text" name="note" placeholder="Note (optional)"
@@ -627,7 +668,7 @@
                                 <p class="text-xs font-mono text-sky-300 truncate">@{{ entry.domain }}</p>
                                 {% if entry.note %}<p class="text-[10px] text-slate-500 truncate">{{ entry.note }}</p>{% endif %}
                             </div>
-                            <form action="/admin/access/domains/delete/{{ entry.id }}" method="POST" class="shrink-0 admin-guard-form" data-success-redirect="/dashboard?tab=access">
+                            <form action="/admin/access/domains/delete/{{ entry.id }}" method="POST" class="shrink-0 admin-guard-form" data-success-redirect="/dashboard?top=admin&sub=access">
                                 <button type="submit" class="text-[9px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Remove</button>
                             </form>
                         </div>
@@ -637,54 +678,61 @@
                     </div>
                 </div>
 
-                <!-- Personal Access Tokens (Admin View) -->
-                <div class="glass-panel p-6 rounded-xl border-t border-t-fuchsia-500/30 space-y-4 lg:col-span-2">
-                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest border-b border-slate-700/50 pb-2">Personal Access Tokens</h3>
+            </div>
+        </section>
 
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-slate-800 text-xs">
-                            <thead class="bg-slate-900/40">
-                                <tr>
-                                    <th class="px-3 py-2 text-left font-bold text-slate-400 uppercase tracking-wider">PAT</th>
-                                    <th class="px-3 py-2 text-left font-bold text-slate-400 uppercase tracking-wider">User</th>
-                                    <th class="px-3 py-2 text-left font-bold text-slate-400 uppercase tracking-wider">Note</th>
-                                    <th class="px-3 py-2 text-left font-bold text-slate-400 uppercase tracking-wider">Last Used</th>
-                                    <th class="px-3 py-2 text-right font-bold text-slate-400 uppercase tracking-wider">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-slate-800/50 bg-slate-900/20">
-                                {% for token in admin_api_tokens %}
-                                {% set token_hint = token.key_suffix or ('h:' ~ token.key_hash[-8:]) %}
-                                <tr class="hover:bg-slate-800/40 transition-colors">
-                                    <td class="px-3 py-2 font-mono text-fuchsia-300">Token #{{ token.id }} <span class="text-slate-500">(...{{ token_hint }})</span></td>
-                                    <td class="px-3 py-2 font-mono text-slate-300">{{ token.user.email if token.user else 'Unknown User' }}</td>
-                                    <td class="px-3 py-2 text-slate-400">{{ token.label or 'N/A' }}</td>
-                                    <td class="px-3 py-2 font-mono text-slate-400">{{ token.last_used_at if token.last_used_at else 'Never' }}</td>
-                                    <td class="px-3 py-2 text-right">
-                                        <div class="inline-flex items-center gap-2">
-                                            <button
-                                                type="button"
-                                                onclick="copyTextToClipboard('{{ token_hint }}')"
-                                                class="text-[9px] font-bold tracking-wider uppercase text-sky-300 hover:text-white border border-sky-900/50 bg-sky-950/30 hover:bg-sky-600 px-2 py-1 rounded transition-all"
-                                            >
-                                                Copy Preview
-                                            </button>
-                                            <form action="/api/tokens/revoke/{{ token.id }}" method="POST" class="inline admin-guard-form" data-confirm="Revoke Token #{{ token.id }} for {{ token.user.email if token.user else 'unknown user' }}?" data-success-redirect="/dashboard?tab=access">
-                                                <button type="submit" class="text-[9px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Revoke</button>
-                                            </form>
-                                        </div>
-                                    </td>
-                                </tr>
-                                {% else %}
-                                <tr>
-                                    <td colspan="5" class="px-3 py-6 text-center text-slate-600 font-mono">No personal access tokens found.</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
+        <!-- ---------------- ADMIN / ROOT TOKENS ---------------- -->
+        <section id="panel-admin-root-tokens" class="content-panel space-y-6" data-top="admin" data-sub="root-tokens">
+            <div class="border-b border-fuchsia-900/50 pb-4">
+                <h2 class="text-2xl font-light text-fuchsia-100">Root Tokens</h2>
+                <p class="text-sm text-fuchsia-400/70 font-mono mt-1">Global API keys with tenant-wide access visibility and revoke control</p>
+            </div>
+
+            <div class="glass-panel p-6 rounded-xl border-t border-t-fuchsia-500/30 space-y-4">
+                <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest border-b border-slate-700/50 pb-2">Global API Key Ledger</h3>
+
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-slate-800 text-xs">
+                        <thead class="bg-slate-900/40">
+                            <tr>
+                                <th class="px-3 py-2 text-left font-bold text-slate-400 uppercase tracking-wider">Key</th>
+                                <th class="px-3 py-2 text-left font-bold text-slate-400 uppercase tracking-wider">Owner</th>
+                                <th class="px-3 py-2 text-left font-bold text-slate-400 uppercase tracking-wider">Label</th>
+                                <th class="px-3 py-2 text-left font-bold text-slate-400 uppercase tracking-wider">Last Used</th>
+                                <th class="px-3 py-2 text-right font-bold text-slate-400 uppercase tracking-wider">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800/50 bg-slate-900/20">
+                            {% for token in admin_api_tokens %}
+                            {% set token_hint = token.key_suffix or ('h:' ~ token.key_hash[-8:]) %}
+                            <tr class="hover:bg-slate-800/40 transition-colors">
+                                <td class="px-3 py-2 font-mono text-fuchsia-300">Key #{{ token.id }} <span class="text-slate-500">(...{{ token_hint }})</span></td>
+                                <td class="px-3 py-2 font-mono text-slate-300">{{ token.user.email if token.user else 'Unknown User' }}</td>
+                                <td class="px-3 py-2 text-slate-400">{{ token.label or 'N/A' }}</td>
+                                <td class="px-3 py-2 font-mono text-slate-400">{{ token.last_used_at if token.last_used_at else 'Never' }}</td>
+                                <td class="px-3 py-2 text-right">
+                                    <div class="inline-flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onclick="copyTextToClipboard('{{ token_hint }}')"
+                                            class="text-[9px] font-bold tracking-wider uppercase text-sky-300 hover:text-white border border-sky-900/50 bg-sky-950/30 hover:bg-sky-600 px-2 py-1 rounded transition-all"
+                                        >
+                                            Copy Preview
+                                        </button>
+                                        <form action="/api/tokens/revoke/{{ token.id }}" method="POST" class="inline admin-guard-form" data-confirm="Revoke Key #{{ token.id }} for {{ token.user.email if token.user else 'unknown user' }}?" data-success-redirect="/dashboard?top=admin&sub=root-tokens">
+                                            <button type="submit" class="text-[9px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Revoke</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5" class="px-3 py-6 text-center text-slate-600 font-mono">No global API keys found.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
-
             </div>
         </section>
         {% endif %}
@@ -725,6 +773,16 @@
                     <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Initial Labels (Comma separated)</label>
                     <input type="text" name="labels" placeholder="testing, office-hvac" class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-sky-500 outline-none placeholder-slate-500">
                 </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Carrier Board (Optional)</label>
+                    <select name="carrier_board_id" class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-sky-500 outline-none">
+                        <option value="">None (Assign Later)</option>
+                        {% for carrier in carrier_boards %}
+                        <option value="{{ carrier.id }}" {% if carrier.name == 'Breadboard' %}selected{% endif %}>{{ carrier.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
                 
                 <div class="pt-2 flex gap-3">
                     <button type="button" onclick="closeClaimModal()" class="flex-1 py-2.5 text-xs font-bold uppercase rounded border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors">Cancel</button>
@@ -747,7 +805,7 @@
                 </button>
             </div>
 
-            <form action="/api/fleet/devices/__MAC__/update" method="POST" id="manage-device-form" class="space-y-5 admin-guard-form" data-success-redirect="/dashboard?tab=devices">
+            <form action="/api/fleet/devices/__MAC__/update" method="POST" id="manage-device-form" class="space-y-5 admin-guard-form" data-success-redirect="/dashboard?top=devices&sub=fleet">
                 <div>
                     <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Target MAC</label>
                     <input type="text" id="manage-device-mac" readonly class="w-full bg-slate-900/80 border border-slate-700 rounded py-2 px-3 text-sm font-mono text-amber-300 outline-none cursor-not-allowed">
@@ -879,87 +937,140 @@
         setInterval(updateTime, 1000);
         updateTime();
 
-        // -- Tab Switching ----------------------------------
-        function getTabColor(tabTarget, isActive) {
-            if (tabTarget === 'tab-admin')  return isActive ? 'text-rose-400'  : 'text-rose-400 hover:text-rose-200';
-            if (tabTarget === 'tab-access') return isActive ? 'text-amber-400' : 'text-amber-400 hover:text-amber-200';
-            if (tabTarget === 'tab-tokens') return isActive ? 'text-fuchsia-400' : 'text-fuchsia-400 hover:text-fuchsia-200';
-            return isActive ? 'text-sky-400' : 'text-slate-400 hover:text-slate-200';
+        // -- Nested Navigation Switching ---------------------
+        const NAV_DEFAULTS = {
+            devices: 'fleet',
+            settings: 'profile',
+            admin: 'teams',
+        };
+
+        function getTopTabClass(top, active) {
+            const palette = {
+                devices: active ? 'text-sky-200 bg-sky-600/30 border border-sky-500/60 shadow-[0_0_15px_rgba(14,165,233,0.25)]' : 'text-slate-300 hover:text-white hover:bg-slate-700/50 border border-transparent',
+                firmware: active ? 'text-emerald-200 bg-emerald-600/30 border border-emerald-500/60 shadow-[0_0_15px_rgba(16,185,129,0.25)]' : 'text-slate-300 hover:text-white hover:bg-slate-700/50 border border-transparent',
+                settings: active ? 'text-fuchsia-200 bg-fuchsia-600/30 border border-fuchsia-500/60 shadow-[0_0_15px_rgba(192,38,211,0.25)]' : 'text-slate-300 hover:text-white hover:bg-slate-700/50 border border-transparent',
+                admin: active ? 'text-rose-200 bg-rose-600/30 border border-rose-500/60 shadow-[0_0_15px_rgba(244,63,94,0.25)]' : 'text-slate-300 hover:text-white hover:bg-slate-700/50 border border-transparent',
+            };
+            return `top-tab-btn px-4 py-2 text-xs font-bold tracking-widest uppercase rounded-lg transition-all ${palette[top] || palette.devices}`;
         }
 
-        function initTabs() {
-            const tabBtns = document.querySelectorAll('.tab-btn');
-            const tabContents = document.querySelectorAll('.tab-content');
+        function getSubTabClass(top, active) {
+            const palette = {
+                devices: active ? 'text-sky-200 bg-sky-700/40 border border-sky-500/60' : 'text-slate-400 bg-slate-900/50 border border-slate-700/60 hover:text-white hover:border-slate-500',
+                settings: active ? 'text-fuchsia-200 bg-fuchsia-700/40 border border-fuchsia-500/60' : 'text-slate-400 bg-slate-900/50 border border-slate-700/60 hover:text-white hover:border-slate-500',
+                admin: active ? 'text-rose-200 bg-rose-700/40 border border-rose-500/60' : 'text-slate-400 bg-slate-900/50 border border-slate-700/60 hover:text-white hover:border-slate-500',
+            };
+            return `sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all ${palette[top] || palette.devices}`;
+        }
 
-            tabBtns.forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const targetId = btn.dataset.target;
+        function updateNavAndPanels(top, sub = null, syncUrl = true) {
+            const topButtons = document.querySelectorAll('.top-tab-btn');
+            const subGroups = document.querySelectorAll('.subnav-group');
+            const subButtons = document.querySelectorAll('.sub-tab-btn');
+            const panels = document.querySelectorAll('.content-panel');
+            const subNavContainer = document.getElementById('sub-nav-container');
 
-                    // Reset all buttons to idle state
-                    tabBtns.forEach(b => {
-                        const isDesktop = b.parentElement.id === 'desktop-tabs';
-                        const color = getTabColor(b.dataset.target, false);
-                        b.className = isDesktop
-                            ? `tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all ${color} hover:bg-slate-700/30`
-                            : `tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all ${color} bg-slate-800/50`;
-                    });
-
-                    // Activate the clicked tab buttons (desktop + mobile mirror)
-                    document.querySelectorAll(`.tab-btn[data-target="${targetId}"]`).forEach(ab => {
-                        const isDesktop = ab.parentElement.id === 'desktop-tabs';
-                        const color = getTabColor(targetId, true);
-                        ab.className = isDesktop
-                            ? `tab-btn px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-md transition-all ${color} bg-slate-700/50 shadow`
-                            : `tab-btn shrink-0 px-4 py-2 text-xs font-bold tracking-wider uppercase rounded-md transition-all ${color} bg-slate-700/50 shadow`;
-                    });
-
-                    // Show the target content panel
-                    tabContents.forEach(content => {
-                        content.classList.remove('active');
-                        if (content.id === targetId) content.classList.add('active');
-                    });
-                });
+            topButtons.forEach((btn) => {
+                btn.className = getTopTabClass(btn.dataset.top, btn.dataset.top === top);
             });
-        }
-        initTabs();
 
-        // -- Auto-select tab from query param (e.g. ?tab=access after redirect) --
-        const urlParams = new URLSearchParams(window.location.search);
-        const tabParam = urlParams.get('tab');
-        if (tabParam) {
-            const targetBtn = document.querySelector(`.tab-btn[data-target="tab-${tabParam}"]`);
-            if (targetBtn) targetBtn.click();
-        }
-
-        // -- Table Filtering Logic --------------------------
-        function filterTable(tableRowsSelector, scopeFilterId, labelFilterId) {
-            const scopeEl = document.getElementById(scopeFilterId);
-            const labelEl = document.getElementById(labelFilterId);
-            if (!scopeEl || !labelEl) return;
-            
-            const scopeVal = scopeEl.value.toLowerCase();
-            const labelVal = labelEl.value.toLowerCase();
-            const rows = document.querySelectorAll(tableRowsSelector);
-
-            rows.forEach(row => {
-                const rowScope = (row.dataset.scope || "").toLowerCase();
-                const rowLabels = (row.dataset.labels || "").toLowerCase().split(',');
-
-                const matchScope = (scopeVal === 'all') || rowScope.includes(scopeVal);
-                const matchLabel = (labelVal === 'all') || rowLabels.some(l => l.trim() === labelVal);
-
-                if (matchScope && matchLabel) {
-                    row.style.display = '';
+            subGroups.forEach((group) => {
+                if (group.dataset.top === top) {
+                    group.classList.add('active');
                 } else {
-                    row.style.display = 'none';
+                    group.classList.remove('active');
                 }
             });
+
+            const visibleSubButtons = Array.from(document.querySelectorAll(`.sub-tab-btn[data-top="${top}"]`));
+            const hasSubNav = visibleSubButtons.length > 0;
+
+            if (subNavContainer) {
+                subNavContainer.classList.toggle('hidden', !hasSubNav);
+            }
+
+            let resolvedSub = sub;
+            if (hasSubNav) {
+                const allowedSubs = visibleSubButtons.map((btn) => btn.dataset.sub);
+                if (!resolvedSub || !allowedSubs.includes(resolvedSub)) {
+                    resolvedSub = NAV_DEFAULTS[top] || allowedSubs[0];
+                }
+            } else {
+                resolvedSub = null;
+            }
+
+            subButtons.forEach((btn) => {
+                const isActive = btn.dataset.top === top && btn.dataset.sub === resolvedSub;
+                btn.className = getSubTabClass(btn.dataset.top, isActive);
+            });
+
+            panels.forEach((panel) => {
+                const panelTop = panel.dataset.top;
+                const panelSub = panel.dataset.sub || null;
+                const shouldShow = panelTop === top && (panelSub === resolvedSub || (!panelSub && !resolvedSub));
+                panel.classList.toggle('active', shouldShow);
+            });
+
+            if (syncUrl) {
+                const url = new URL(window.location.href);
+                url.searchParams.delete('tab');
+                url.searchParams.set('top', top);
+                if (resolvedSub) {
+                    url.searchParams.set('sub', resolvedSub);
+                } else {
+                    url.searchParams.delete('sub');
+                }
+                window.history.replaceState({}, '', url.toString());
+            }
         }
 
-        // Devices Table Filters
-        document.getElementById('devices-scope-filter')?.addEventListener('change', () => filterTable('.device-row', 'devices-scope-filter', 'devices-label-filter'));
-        document.getElementById('devices-label-filter')?.addEventListener('change', () => filterTable('.device-row', 'devices-scope-filter', 'devices-label-filter'));
+        function normalizeLegacyTab(tabValue) {
+            const map = {
+                onboard: { top: 'devices', sub: 'onboard' },
+                deploy: { top: 'devices', sub: 'staging' },
+                fleet: { top: 'devices', sub: 'fleet' },
+                devices: { top: 'devices', sub: 'fleet' },
+                tokens: { top: 'settings', sub: 'tokens' },
+                admin: { top: 'admin', sub: 'teams' },
+                hardware: { top: 'admin', sub: 'hardware' },
+                access: { top: 'admin', sub: 'access' },
+            };
+            return map[tabValue] || null;
+        }
 
+        function initNestedNavigation() {
+            document.querySelectorAll('.top-tab-btn').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const top = btn.dataset.top;
+                    updateNavAndPanels(top, NAV_DEFAULTS[top] || null);
+                });
+            });
+
+            document.querySelectorAll('.sub-tab-btn').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    updateNavAndPanels(btn.dataset.top, btn.dataset.sub);
+                });
+            });
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const explicitTop = urlParams.get('top');
+            const explicitSub = urlParams.get('sub');
+            const legacy = normalizeLegacyTab(urlParams.get('tab'));
+
+            if (explicitTop) {
+                updateNavAndPanels(explicitTop, explicitSub, false);
+                return;
+            }
+
+            if (legacy) {
+                updateNavAndPanels(legacy.top, legacy.sub, false);
+                return;
+            }
+
+            updateNavAndPanels('devices', 'fleet', false);
+        }
+
+        initNestedNavigation();
 
         // -- Claim Modal Logic ------------------------------
         const claimModal = document.getElementById('claim-modal');
@@ -1364,7 +1475,7 @@
                 closeUploadModal();
                 showToast('Firmware uploaded. Refreshing deploy table...', 'success');
                 setTimeout(() => {
-                    window.location.href = '/dashboard?tab=deploy';
+                    window.location.href = '/dashboard?top=firmware';
                 }, 700);
             } catch (err) {
                 showToast(err?.message || 'Upload failed.', 'error');

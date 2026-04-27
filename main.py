@@ -52,6 +52,9 @@ DATA_DIR = "/app/data"
 FIRMWARE_DIR = os.path.join(DATA_DIR, "firmware")
 os.makedirs(FIRMWARE_DIR, exist_ok=True)
 
+DEFAULT_CARRIER_BOARD_NAME = "Breadboard"
+DEFAULT_CARRIER_BOARD_DESCRIPTION = "Wildcard prototyping profile for dev rigs and breadboard builds."
+
 # =============================================================================
 # Database Setup
 # =============================================================================
@@ -111,6 +114,11 @@ def _migrate_legacy_sqlite_schema() -> None:
         firmware_release_table_info = conn.execute(text("PRAGMA table_info(firmware_releases)"))
         firmware_release_columns = {row[1] for row in firmware_release_table_info.fetchall()}
 
+        carrier_board_table_info = conn.execute(text("PRAGMA table_info(carrier_boards)"))
+        carrier_board_columns = {row[1] for row in carrier_board_table_info.fetchall()}
+        if "description" not in carrier_board_columns:
+            conn.execute(text("ALTER TABLE carrier_boards ADD COLUMN description VARCHAR"))
+
         if "firmware_name" not in firmware_release_columns:
             conn.execute(text("ALTER TABLE firmware_releases ADD COLUMN firmware_name VARCHAR"))
         if "firmware_version" not in firmware_release_columns:
@@ -158,6 +166,37 @@ def _migrate_legacy_sqlite_schema() -> None:
 
 
 _migrate_legacy_sqlite_schema()
+
+
+def _seed_default_carrier_board() -> None:
+    """
+    Ensure a wildcard carrier board always exists for prototyping workflows.
+    Also upgrades legacy naming from "Dev/Any (Prototyping)" to "Breadboard".
+    """
+    db = SessionLocal()
+    try:
+        board = db.query(CarrierBoard).filter(CarrierBoard.name == DEFAULT_CARRIER_BOARD_NAME).first()
+        legacy = db.query(CarrierBoard).filter(CarrierBoard.name == "Dev/Any (Prototyping)").first()
+
+        if not board and legacy:
+            legacy.name = DEFAULT_CARRIER_BOARD_NAME
+            legacy.description = legacy.description or DEFAULT_CARRIER_BOARD_DESCRIPTION
+            db.commit()
+            return
+
+        if not board:
+            db.add(CarrierBoard(
+                name=DEFAULT_CARRIER_BOARD_NAME,
+                description=DEFAULT_CARRIER_BOARD_DESCRIPTION,
+            ))
+            db.commit()
+            return
+
+        if not board.description:
+            board.description = DEFAULT_CARRIER_BOARD_DESCRIPTION
+            db.commit()
+    finally:
+        db.close()
 
 # =============================================================================
 # Access Allowlist: Bootstrap from Env Var on First Run
@@ -487,8 +526,10 @@ GOOGLE_OAUTH_REDIRECT_URI = os.getenv("GOOGLE_OAUTH_REDIRECT_URI")
 # Comma-separated allowlist used ONLY to seed the database on first run.
 ADMIN_EMAILS = set(e.strip().lower() for e in os.getenv("ADMIN_EMAILS", "").split(",") if e.strip())
 
-# Seed DB allowlist from env var before the first request is handled.
-_seed_allowlist_from_env()
+@app.on_event("startup")
+def startup_seed_defaults() -> None:
+    _seed_allowlist_from_env()
+    _seed_default_carrier_board()
 
 @app.get("/login", include_in_schema=False)
 async def login(request: Request):
@@ -886,6 +927,52 @@ def admin_delete_team(
     db.delete(team)
     db.commit()
     return RedirectResponse(url="/dashboard?tab=admin", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.post("/admin/hardware/add")
+def admin_add_hardware_profile(
+    name: str = Form(...),
+    description: str = Form(""),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin_user),
+):
+    _ = current_user
+    normalized_name = name.strip()
+    normalized_description = (description or "").strip() or None
+
+    if not normalized_name:
+        raise HTTPException(status_code=400, detail="Carrier board name is required.")
+
+    if db.query(CarrierBoard).filter(CarrierBoard.name == normalized_name).first():
+        raise HTTPException(status_code=409, detail="Carrier board already exists.")
+
+    db.add(CarrierBoard(name=normalized_name, description=normalized_description))
+    db.commit()
+    return RedirectResponse(url="/dashboard?top=admin&sub=hardware", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.post("/admin/hardware/delete/{board_id}")
+def admin_delete_hardware_profile(
+    board_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin_user),
+):
+    _ = current_user
+    board = db.query(CarrierBoard).filter(CarrierBoard.id == board_id).first()
+    if not board:
+        raise HTTPException(status_code=404, detail="Carrier board not found.")
+
+    if board.name == DEFAULT_CARRIER_BOARD_NAME:
+        raise HTTPException(status_code=400, detail="The default Breadboard profile cannot be deleted.")
+
+    in_use_by_release = db.query(FirmwareRelease.id).filter(FirmwareRelease.carrier_board_id == board_id).first()
+    in_use_by_device = db.query(Device.id).filter(Device.carrier_board_id == board_id).first()
+    if in_use_by_release or in_use_by_device:
+        raise HTTPException(status_code=400, detail="Carrier board is in use by devices or firmware releases.")
+
+    db.delete(board)
+    db.commit()
+    return RedirectResponse(url="/dashboard?top=admin&sub=hardware", status_code=status.HTTP_303_SEE_OTHER)
 
 
 # =============================================================================
@@ -1310,6 +1397,7 @@ def claim_device_from_form(
     mac: str = Form(...),
     scope: str = Form(...),
     labels: str = Form(""),
+    carrier_board_id: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     user = get_current_user_from_db(request, db)
@@ -1327,15 +1415,20 @@ def claim_device_from_form(
             detail="You do not have permission to claim hardware into this scope.",
         )
 
+    parsed_board_id = _parse_optional_int(carrier_board_id, "carrier_board_id")
+    if parsed_board_id is not None:
+        if not db.query(CarrierBoard).filter(CarrierBoard.id == parsed_board_id).first():
+            raise HTTPException(status_code=404, detail="Carrier board not found.")
+
     device.claimed = True
     device.scope_type = target_scope_type
     device.scope_id = target_scope_id
-    device.carrier_board_id = None
+    device.carrier_board_id = parsed_board_id
     device.secret = secrets.token_urlsafe(32)
     _upsert_labels_for_device(device, labels, db)
 
     db.commit()
-    return RedirectResponse(url="/dashboard?tab=onboard", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url="/dashboard?top=devices&sub=onboard", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.post("/api/fleet/devices/{mac}/update")
@@ -1386,7 +1479,7 @@ def update_fleet_device(
     _upsert_labels_for_device(device, labels, db)
 
     db.commit()
-    return RedirectResponse(url="/dashboard?tab=devices", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url="/dashboard?top=devices&sub=fleet", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.get("/api/groups/{group_id}/readiness")
@@ -1466,4 +1559,4 @@ def unclaim_device(
     device.firmware_override_id = None
     device.secret = "pending_claim"
     db.commit()
-    return RedirectResponse(url="/dashboard?tab=devices", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url="/dashboard?top=devices&sub=fleet", status_code=status.HTTP_303_SEE_OTHER)
