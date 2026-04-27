@@ -55,33 +55,27 @@
 
             <div class="flex flex-wrap items-center gap-2 border border-slate-700/60 bg-slate-800/40 rounded-xl p-1" id="top-level-nav">
                 <button class="top-tab-btn px-4 py-2 text-xs font-bold tracking-widest uppercase rounded-lg transition-all" data-top="devices">Devices</button>
+                <button class="top-tab-btn px-4 py-2 text-xs font-bold tracking-widest uppercase rounded-lg transition-all" data-top="hardware">Hardware</button>
                 <button class="top-tab-btn px-4 py-2 text-xs font-bold tracking-widest uppercase rounded-lg transition-all" data-top="firmware">Firmware</button>
                 <button class="top-tab-btn px-4 py-2 text-xs font-bold tracking-widest uppercase rounded-lg transition-all" data-top="settings">Settings</button>
-                {% if db_user and db_user.role.value == 'Admin' %}
-                <button class="top-tab-btn px-4 py-2 text-xs font-bold tracking-widest uppercase rounded-lg transition-all" data-top="admin">Admin</button>
-                {% endif %}
             </div>
 
             <div class="border border-slate-700/60 bg-slate-800/30 rounded-xl px-3 py-2" id="sub-nav-container">
                 <div class="subnav-group flex-wrap gap-2" data-top="devices">
-                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="devices" data-sub="fleet">Fleet</button>
-                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="devices" data-sub="staging">Staging</button>
                     <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="devices" data-sub="onboard">Onboard</button>
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="devices" data-sub="staging">Staging</button>
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="devices" data-sub="fleet">Fleet</button>
                 </div>
 
                 <div class="subnav-group flex-wrap gap-2" data-top="settings">
                     <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="settings" data-sub="profile">My Profile</button>
                     <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="settings" data-sub="tokens">My Tokens</button>
+                    {% if db_user and db_user.role.value == 'Admin' %}
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="settings" data-sub="teams">Teams</button>
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="settings" data-sub="access">Access</button>
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="settings" data-sub="root-tokens">Root Tokens</button>
+                    {% endif %}
                 </div>
-
-                {% if db_user and db_user.role.value == 'Admin' %}
-                <div class="subnav-group flex-wrap gap-2" data-top="admin">
-                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="admin" data-sub="teams">Teams</button>
-                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="admin" data-sub="hardware">Hardware</button>
-                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="admin" data-sub="access">Access</button>
-                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="admin" data-sub="root-tokens">Root Tokens</button>
-                </div>
-                {% endif %}
             </div>
         </div>
     </nav>
@@ -403,7 +397,7 @@
 
         <!-- ---------------- ADMIN / TEAMS ---------------- -->
         {% if db_user and db_user.role.value == 'Admin' %}
-        <section id="panel-admin-teams" class="content-panel space-y-6" data-top="admin" data-sub="teams">
+        <section id="panel-admin-teams" class="content-panel space-y-6" data-top="settings" data-sub="teams">
             <div class="border-b border-rose-900/50 pb-4">
                 <h2 class="text-2xl font-light text-rose-100 flex items-center gap-3">
                     <svg class="w-6 h-6 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
@@ -415,7 +409,7 @@
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div class="glass-panel p-6 rounded-xl border-t border-t-rose-500/30">
                     <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest mb-4 border-b border-slate-700/50 pb-2">Create Team</h3>
-                    <form action="/admin/teams/add" method="POST" class="space-y-4 admin-guard-form" data-success-redirect="/dashboard?top=admin&sub=teams">
+                    <form action="/admin/teams/add" method="POST" class="space-y-4 admin-guard-form" data-success-redirect="/dashboard?top=settings&sub=teams">
                         <div>
                             <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">New Team Name</label>
                             <input type="text" name="team_name" placeholder="Engineering Beta" required class="w-full bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-rose-500 focus:border-rose-500 text-slate-200">
@@ -426,7 +420,7 @@
 
                 <div class="glass-panel p-6 rounded-xl border-t border-t-rose-500/30">
                     <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest mb-4 border-b border-slate-700/50 pb-2">Add User To Team</h3>
-                    <form action="/admin/teams/assign" method="POST" class="space-y-4 admin-guard-form" data-success-redirect="/dashboard?top=admin&sub=teams">
+                    <form action="/admin/teams/assign" method="POST" class="space-y-4 admin-guard-form" data-success-redirect="/dashboard?top=settings&sub=teams">
                         <div>
                             <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">User</label>
                             <select name="email" required class="w-full bg-slate-800 text-slate-300 text-xs rounded-md border border-slate-700 px-2 py-2 outline-none">
@@ -457,7 +451,7 @@
                                     <p class="text-sm font-semibold text-slate-200">{{ team.name }}</p>
                                     <p class="text-[10px] font-mono text-slate-500">TEAM ID #{{ team.id }}</p>
                                 </div>
-                                <form action="/admin/teams/delete/{{ team.id }}" method="POST" class="admin-guard-form" data-confirm="Delete team {{ team.name }}?" data-success-redirect="/dashboard?top=admin&sub=teams">
+                                <form action="/admin/teams/delete/{{ team.id }}" method="POST" class="admin-guard-form" data-confirm="Delete team {{ team.name }}?" data-success-redirect="/dashboard?top=settings&sub=teams">
                                     <button type="submit" class="text-[10px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Delete Team</button>
                                 </form>
                             </div>
@@ -469,7 +463,7 @@
                                         <p class="text-xs font-mono text-slate-300 truncate">{{ member.email }}</p>
                                         <p class="text-[10px] text-slate-500 truncate">{{ member.name or 'No profile name' }}</p>
                                     </div>
-                                    <form action="/admin/teams/members/remove" method="POST" class="shrink-0 admin-guard-form" data-success-redirect="/dashboard?top=admin&sub=teams">
+                                    <form action="/admin/teams/members/remove" method="POST" class="shrink-0 admin-guard-form" data-success-redirect="/dashboard?top=settings&sub=teams">
                                         <input type="hidden" name="team_id" value="{{ team.id }}">
                                         <input type="hidden" name="user_id" value="{{ member.id }}">
                                         <button type="submit" class="text-[9px] font-bold tracking-wider uppercase text-amber-300 hover:text-white border border-amber-900/50 bg-amber-950/30 hover:bg-amber-600 px-2 py-1 rounded transition-all">Remove</button>
@@ -534,15 +528,19 @@
                     <div class="flex items-center justify-between bg-slate-800/60 border border-slate-700/60 rounded px-3 py-2">
                         <div>
                             <p class="text-[10px] font-mono text-slate-300">{{ token.label or ('Token #' ~ token.id) }}</p>
-                            <p class="text-[9px] font-mono text-slate-500">ID #{{ token.id }} - Preview ...{{ token_hint }} - Created {{ token.created_at }}</p>
+                            <p class="text-[9px] font-mono text-slate-500">ID #{{ token.id }} - Created {{ token.created_at }}</p>
                         </div>
                         <div class="flex items-center gap-2">
                             <button
                                 type="button"
-                                onclick="copyTextToClipboard('{{ token_hint }}')"
+                                {% if new_key and new_key_token_id and token.id == new_key_token_id %}
+                                onclick="copyTextToClipboard('{{ new_key }}')"
+                                {% else %}
+                                onclick="showToast('Full PAT is only available at creation time.', 'error')"
+                                {% endif %}
                                 class="text-[9px] font-bold tracking-wider uppercase text-sky-300 hover:text-white border border-sky-900/50 bg-sky-950/30 hover:bg-sky-600 px-2 py-1 rounded transition-all"
                             >
-                                Copy Preview
+                                Copy
                             </button>
                             <form action="/api/tokens/revoke/{{ token.id }}" method="POST" data-confirm="Revoke this token?" data-success-redirect="/dashboard?top=settings&sub=tokens">
                                 <button type="submit" class="text-[9px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Revoke</button>
@@ -557,17 +555,17 @@
         </section>
 
         <!-- ---------------- ADMIN / HARDWARE ---------------- -->
-        {% if db_user and db_user.role.value == 'Admin' %}
-        <section id="panel-admin-hardware" class="content-panel space-y-6" data-top="admin" data-sub="hardware">
+        <section id="panel-admin-hardware" class="content-panel space-y-6" data-top="hardware">
             <div class="border-b border-emerald-900/50 pb-4">
                 <h2 class="text-2xl font-light text-emerald-100">Carrier Boards</h2>
                 <p class="text-sm text-emerald-400/70 font-mono mt-1">Manage hardware profiles used by devices and firmware releases</p>
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {% if db_user and db_user.role.value == 'Admin' %}
                 <div class="glass-panel p-6 rounded-xl border-t border-t-emerald-500/30 lg:col-span-1 space-y-4">
                     <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest border-b border-slate-700/50 pb-2">Add Carrier Board</h3>
-                    <form action="/admin/hardware/add" method="POST" class="space-y-4 admin-guard-form" data-success-redirect="/dashboard?top=admin&sub=hardware">
+                    <form action="/admin/hardware/add" method="POST" class="space-y-4 admin-guard-form" data-success-redirect="/dashboard?top=hardware">
                         <div>
                             <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Name</label>
                             <input type="text" name="name" placeholder="FeatherS3 Rev-A" required class="w-full bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-slate-200">
@@ -579,6 +577,7 @@
                         <button type="submit" class="w-full text-xs font-bold tracking-widest uppercase px-4 py-2 rounded bg-emerald-600/80 text-white hover:bg-emerald-500 transition-colors shadow">Add Carrier Board</button>
                     </form>
                 </div>
+                {% endif %}
 
                 <div class="glass-panel p-6 rounded-xl border-t border-t-sky-500/30 lg:col-span-2 space-y-4">
                     <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest border-b border-slate-700/50 pb-2">Registered Carrier Boards</h3>
@@ -591,10 +590,12 @@
                             </div>
                             {% if board.name == 'Breadboard' %}
                             <span class="shrink-0 text-[9px] font-bold tracking-wider uppercase text-emerald-300 border border-emerald-700/50 bg-emerald-950/30 px-2 py-1 rounded">Default</span>
-                            {% else %}
-                            <form action="/admin/hardware/delete/{{ board.id }}" method="POST" class="shrink-0 admin-guard-form" data-confirm="Delete carrier board {{ board.name }}?" data-success-redirect="/dashboard?top=admin&sub=hardware">
+                            {% elif db_user and db_user.role.value == 'Admin' %}
+                            <form action="/admin/hardware/delete/{{ board.id }}" method="POST" class="shrink-0 admin-guard-form" data-confirm="Delete carrier board {{ board.name }}?" data-success-redirect="/dashboard?top=hardware">
                                 <button type="submit" class="text-[9px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Delete</button>
                             </form>
+                            {% else %}
+                            <span class="shrink-0 text-[9px] font-bold tracking-wider uppercase text-slate-400 border border-slate-700/50 bg-slate-900/40 px-2 py-1 rounded">Read Only</span>
                             {% endif %}
                         </div>
                         {% else %}
@@ -604,11 +605,10 @@
                 </div>
             </div>
         </section>
-        {% endif %}
 
         <!-- ---------------- ADMIN / ACCESS ---------------- -->
         {% if db_user and db_user.role.value == 'Admin' %}
-        <section id="panel-admin-access" class="content-panel space-y-6" data-top="admin" data-sub="access">
+        <section id="panel-admin-access" class="content-panel space-y-6" data-top="settings" data-sub="access">
             <div class="border-b border-amber-900/50 pb-4">
                 <h2 class="text-2xl font-light text-amber-100 flex items-center gap-3">
                     <svg class="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
@@ -623,7 +623,7 @@
                 <div class="glass-panel p-6 rounded-xl border-t border-t-amber-500/30 space-y-4">
                     <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest border-b border-slate-700/50 pb-2">Permitted Email Addresses</h3>
 
-                    <form action="/admin/access/emails/add" method="POST" class="flex gap-2 flex-wrap admin-guard-form" data-success-redirect="/dashboard?top=admin&sub=access">
+                    <form action="/admin/access/emails/add" method="POST" class="flex gap-2 flex-wrap admin-guard-form" data-success-redirect="/dashboard?top=settings&sub=access">
                         <input type="email" name="email" placeholder="operator@company.com" required
                             class="flex-1 min-w-0 bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-slate-200 placeholder-slate-500 outline-none">
                         <input type="text" name="note" placeholder="Note (optional)"
@@ -638,7 +638,7 @@
                                 <p class="text-xs font-mono text-amber-300 truncate">{{ entry.email }}</p>
                                 {% if entry.note %}<p class="text-[10px] text-slate-500 truncate">{{ entry.note }}</p>{% endif %}
                             </div>
-                            <form action="/admin/access/emails/delete/{{ entry.id }}" method="POST" class="shrink-0 admin-guard-form" data-success-redirect="/dashboard?top=admin&sub=access">
+                            <form action="/admin/access/emails/delete/{{ entry.id }}" method="POST" class="shrink-0 admin-guard-form" data-success-redirect="/dashboard?top=settings&sub=access">
                                 <button type="submit" class="text-[9px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Remove</button>
                             </form>
                         </div>
@@ -653,7 +653,7 @@
                     <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest border-b border-slate-700/50 pb-2">Permitted Domains (Wildcard)</h3>
                     <p class="text-[10px] text-slate-500 font-mono">Any <span class="text-sky-400">@domain</span> match grants access. Use carefully.</p>
 
-                    <form action="/admin/access/domains/add" method="POST" class="flex gap-2 flex-wrap admin-guard-form" data-success-redirect="/dashboard?top=admin&sub=access">
+                    <form action="/admin/access/domains/add" method="POST" class="flex gap-2 flex-wrap admin-guard-form" data-success-redirect="/dashboard?top=settings&sub=access">
                         <input type="text" name="domain" placeholder="borealtek.ca" required
                             class="flex-1 min-w-0 bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-sky-500 focus:border-sky-500 text-slate-200 placeholder-slate-500 outline-none">
                         <input type="text" name="note" placeholder="Note (optional)"
@@ -668,7 +668,7 @@
                                 <p class="text-xs font-mono text-sky-300 truncate">@{{ entry.domain }}</p>
                                 {% if entry.note %}<p class="text-[10px] text-slate-500 truncate">{{ entry.note }}</p>{% endif %}
                             </div>
-                            <form action="/admin/access/domains/delete/{{ entry.id }}" method="POST" class="shrink-0 admin-guard-form" data-success-redirect="/dashboard?top=admin&sub=access">
+                            <form action="/admin/access/domains/delete/{{ entry.id }}" method="POST" class="shrink-0 admin-guard-form" data-success-redirect="/dashboard?top=settings&sub=access">
                                 <button type="submit" class="text-[9px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Remove</button>
                             </form>
                         </div>
@@ -682,7 +682,7 @@
         </section>
 
         <!-- ---------------- ADMIN / ROOT TOKENS ---------------- -->
-        <section id="panel-admin-root-tokens" class="content-panel space-y-6" data-top="admin" data-sub="root-tokens">
+        <section id="panel-admin-root-tokens" class="content-panel space-y-6" data-top="settings" data-sub="root-tokens">
             <div class="border-b border-fuchsia-900/50 pb-4">
                 <h2 class="text-2xl font-light text-fuchsia-100">Root Tokens</h2>
                 <p class="text-sm text-fuchsia-400/70 font-mono mt-1">Global API keys with tenant-wide access visibility and revoke control</p>
@@ -719,7 +719,7 @@
                                         >
                                             Copy Preview
                                         </button>
-                                        <form action="/api/tokens/revoke/{{ token.id }}" method="POST" class="inline admin-guard-form" data-confirm="Revoke Key #{{ token.id }} for {{ token.user.email if token.user else 'unknown user' }}?" data-success-redirect="/dashboard?top=admin&sub=root-tokens">
+                                        <form action="/api/tokens/revoke/{{ token.id }}" method="POST" class="inline admin-guard-form" data-confirm="Revoke Key #{{ token.id }} for {{ token.user.email if token.user else 'unknown user' }}?" data-success-redirect="/dashboard?top=settings&sub=root-tokens">
                                             <button type="submit" class="text-[9px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Revoke</button>
                                         </form>
                                     </div>
@@ -939,17 +939,16 @@
 
         // -- Nested Navigation Switching ---------------------
         const NAV_DEFAULTS = {
-            devices: 'fleet',
+            devices: 'onboard',
             settings: 'profile',
-            admin: 'teams',
         };
 
         function getTopTabClass(top, active) {
             const palette = {
                 devices: active ? 'text-sky-200 bg-sky-600/30 border border-sky-500/60 shadow-[0_0_15px_rgba(14,165,233,0.25)]' : 'text-slate-300 hover:text-white hover:bg-slate-700/50 border border-transparent',
+                hardware: active ? 'text-amber-200 bg-amber-600/30 border border-amber-500/60 shadow-[0_0_15px_rgba(245,158,11,0.25)]' : 'text-slate-300 hover:text-white hover:bg-slate-700/50 border border-transparent',
                 firmware: active ? 'text-emerald-200 bg-emerald-600/30 border border-emerald-500/60 shadow-[0_0_15px_rgba(16,185,129,0.25)]' : 'text-slate-300 hover:text-white hover:bg-slate-700/50 border border-transparent',
                 settings: active ? 'text-fuchsia-200 bg-fuchsia-600/30 border border-fuchsia-500/60 shadow-[0_0_15px_rgba(192,38,211,0.25)]' : 'text-slate-300 hover:text-white hover:bg-slate-700/50 border border-transparent',
-                admin: active ? 'text-rose-200 bg-rose-600/30 border border-rose-500/60 shadow-[0_0_15px_rgba(244,63,94,0.25)]' : 'text-slate-300 hover:text-white hover:bg-slate-700/50 border border-transparent',
             };
             return `top-tab-btn px-4 py-2 text-xs font-bold tracking-widest uppercase rounded-lg transition-all ${palette[top] || palette.devices}`;
         }
@@ -958,7 +957,6 @@
             const palette = {
                 devices: active ? 'text-sky-200 bg-sky-700/40 border border-sky-500/60' : 'text-slate-400 bg-slate-900/50 border border-slate-700/60 hover:text-white hover:border-slate-500',
                 settings: active ? 'text-fuchsia-200 bg-fuchsia-700/40 border border-fuchsia-500/60' : 'text-slate-400 bg-slate-900/50 border border-slate-700/60 hover:text-white hover:border-slate-500',
-                admin: active ? 'text-rose-200 bg-rose-700/40 border border-rose-500/60' : 'text-slate-400 bg-slate-900/50 border border-slate-700/60 hover:text-white hover:border-slate-500',
             };
             return `sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all ${palette[top] || palette.devices}`;
         }
@@ -1029,11 +1027,11 @@
                 onboard: { top: 'devices', sub: 'onboard' },
                 deploy: { top: 'devices', sub: 'staging' },
                 fleet: { top: 'devices', sub: 'fleet' },
-                devices: { top: 'devices', sub: 'fleet' },
+                devices: { top: 'devices', sub: 'onboard' },
+                hardware: { top: 'hardware' },
                 tokens: { top: 'settings', sub: 'tokens' },
-                admin: { top: 'admin', sub: 'teams' },
-                hardware: { top: 'admin', sub: 'hardware' },
-                access: { top: 'admin', sub: 'access' },
+                admin: { top: 'settings', sub: 'teams' },
+                access: { top: 'settings', sub: 'access' },
             };
             return map[tabValue] || null;
         }
@@ -1067,7 +1065,7 @@
                 return;
             }
 
-            updateNavAndPanels('devices', 'fleet', false);
+            updateNavAndPanels('devices', 'onboard', false);
         }
 
         initNestedNavigation();

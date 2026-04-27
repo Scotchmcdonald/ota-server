@@ -686,6 +686,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
 
     api_tokens = db.query(APIKey).filter(APIKey.user_id == user_info.id).order_by(APIKey.id.desc()).all()
     new_key  = request.session.pop("new_key_flash", None)
+    new_key_token_id = request.session.pop("new_key_token_id_flash", None)
     carrier_boards = db.query(CarrierBoard).order_by(CarrierBoard.name.asc()).all()
     application_groups = db.query(ApplicationGroup).order_by(ApplicationGroup.name.asc()).all()
 
@@ -750,6 +751,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             "firmwares":       firmware_releases,
             "api_tokens":      api_tokens,
             "new_key":         new_key,
+            "new_key_token_id": new_key_token_id,
             "carrier_boards":  carrier_boards,
             "application_groups": application_groups,
             "firmware_names": firmware_names,
@@ -868,7 +870,7 @@ def admin_add_team(
         raise HTTPException(status_code=409, detail="Team already exists.")
     db.add(Team(name=name))
     db.commit()
-    return RedirectResponse(url="/dashboard?tab=admin", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url="/dashboard?top=settings&sub=teams", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.post("/admin/teams/assign")
@@ -901,7 +903,7 @@ def admin_assign_team(
         user.teams.append(team)
         db.commit()
 
-    return RedirectResponse(url="/dashboard?tab=admin", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url="/dashboard?top=settings&sub=teams", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.post("/admin/teams/members/remove")
@@ -924,7 +926,7 @@ def admin_remove_user_from_team(
         user.teams.remove(team)
         db.commit()
 
-    return RedirectResponse(url="/dashboard?tab=admin", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url="/dashboard?top=settings&sub=teams", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.post("/admin/teams/delete/{team_id}")
@@ -940,7 +942,7 @@ def admin_delete_team(
 
     db.delete(team)
     db.commit()
-    return RedirectResponse(url="/dashboard?tab=admin", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url="/dashboard?top=settings&sub=teams", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.post("/admin/hardware/add")
@@ -974,7 +976,7 @@ def admin_add_hardware_profile(
     else:
         db.add(CarrierBoard(name=normalized_name, description=normalized_description))
     db.commit()
-    return RedirectResponse(url="/dashboard?top=admin&sub=hardware", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url="/dashboard?top=hardware", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.post("/admin/hardware/delete/{board_id}")
@@ -998,7 +1000,7 @@ def admin_delete_hardware_profile(
 
     db.delete(board)
     db.commit()
-    return RedirectResponse(url="/dashboard?top=admin&sub=hardware", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url="/dashboard?top=hardware", status_code=status.HTTP_303_SEE_OTHER)
 
 
 # =============================================================================
@@ -1029,16 +1031,19 @@ def generate_key(
 
     token_label = (label or "").strip() or f"Generated {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC"
 
-    db.add(APIKey(
+    token_row = APIKey(
         key_hash=hash_api_key(raw_key),
         key_suffix=raw_key[-8:],
         label=token_label,
         owner_id=current_user.id,
         user_id=current_user.id,
-    ))
+    )
+    db.add(token_row)
+    db.flush()
     db.commit()
 
     request.session["new_key_flash"] = raw_key
+    request.session["new_key_token_id_flash"] = token_row.id
     return RedirectResponse(url="/dashboard?tab=tokens", status_code=status.HTTP_303_SEE_OTHER)
 
 
