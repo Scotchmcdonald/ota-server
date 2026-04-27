@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy import create_engine, event, text, and_, or_, false
 from starlette.middleware.sessions import SessionMiddleware
-from models import Base, User, Team, APIKey, Device, Firmware, Label, UserRole, ScopeType, DeviceProfile, FirmwareRelease, ApplicationGroup, AllowedEmail, AllowedDomain
+from models import Base, User, Team, APIKey, Device, Firmware, Label, UserRole, ScopeType, CarrierBoard, FirmwareRelease, ApplicationGroup, AllowedEmail, AllowedDomain
 from auth import (
     oauth, hash_api_key, get_current_user_from_db, verify_api_key,
     get_current_user_scopes, verify_api_key_scope_access
@@ -94,8 +94,14 @@ def _migrate_legacy_sqlite_schema() -> None:
             conn.execute(text("ALTER TABLE devices ADD COLUMN scope_id INTEGER"))
         if "scope_type" not in existing_columns:
             conn.execute(text("ALTER TABLE devices ADD COLUMN scope_type VARCHAR(8)"))
-        if "device_profile_id" not in existing_columns:
-            conn.execute(text("ALTER TABLE devices ADD COLUMN device_profile_id INTEGER"))
+        if "compute_module" not in existing_columns:
+            conn.execute(text("ALTER TABLE devices ADD COLUMN compute_module VARCHAR"))
+        if "class_name" not in existing_columns:
+            conn.execute(text("ALTER TABLE devices ADD COLUMN class_name VARCHAR"))
+        if "group_name" not in existing_columns:
+            conn.execute(text("ALTER TABLE devices ADD COLUMN group_name VARCHAR"))
+        if "carrier_board_id" not in existing_columns:
+            conn.execute(text("ALTER TABLE devices ADD COLUMN carrier_board_id INTEGER"))
         if "application_group_id" not in existing_columns:
             conn.execute(text("ALTER TABLE devices ADD COLUMN application_group_id INTEGER"))
         if "firmware_override_id" not in existing_columns:
@@ -112,6 +118,9 @@ def _migrate_legacy_sqlite_schema() -> None:
 
         if "key_suffix" not in api_key_columns:
             conn.execute(text("ALTER TABLE api_keys ADD COLUMN key_suffix VARCHAR(8)"))
+
+        if "label" not in api_key_columns:
+            conn.execute(text("ALTER TABLE api_keys ADD COLUMN label VARCHAR"))
 
         if "last_used_at" not in api_key_columns:
             conn.execute(text("ALTER TABLE api_keys ADD COLUMN last_used_at DATETIME"))
@@ -487,7 +496,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             "fw": device.version or "unknown",
             "batt": int(device.battery) if device.battery is not None else 0,
             "status": "online" if is_online else "offline",
-            "device_profile_id": device.device_profile_id,
+            "carrier_board_id": device.carrier_board_id,
             "firmware_override_id": device.firmware_override_id,
         })
 
@@ -501,7 +510,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
 
     api_tokens = db.query(APIKey).filter(APIKey.user_id == user_info.id).order_by(APIKey.id.desc()).all()
     new_key  = request.session.pop("new_key_flash", None)
-    device_profiles = db.query(DeviceProfile).order_by(DeviceProfile.name.asc()).all()
+    carrier_boards = db.query(CarrierBoard).order_by(CarrierBoard.name.asc()).all()
     application_groups = db.query(ApplicationGroup).order_by(ApplicationGroup.name.asc()).all()
 
     allowed_emails  = db.query(AllowedEmail).order_by(AllowedEmail.created_at).all()  if user_info.role == UserRole.Admin else []
@@ -520,7 +529,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             "firmwares":       firmware_releases,
             "api_tokens":      api_tokens,
             "new_key":         new_key,
-            "device_profiles": device_profiles,
+            "carrier_boards":  carrier_boards,
             "application_groups": application_groups,
             "scope_options":   scope_options,
             "fleet_nodes":     fleet_nodes,
@@ -917,23 +926,6 @@ def upload_firmware_web(
 
     return JSONResponse(status_code=201, content={"message": "Firmware upload successful."})
 
-    release = FirmwareRelease(
-        version=version_clean,
-        file_path=file_path,
-        device_profile_id=device_profile_id,
-    )
-    db.add(release)
-    db.commit()
-    db.refresh(release)
-
-    return JSONResponse(status_code=201, content={
-        "message": "Firmware release created.",
-        "firmware_release_id": release.id,
-        "version": release.version,
-        "device_profile": profile.name,
-        "filename": filename,
-    })
-
 
 # =============================================================================
 # ESP32 OTA Check-Update (Device Secret Auth)
@@ -1092,7 +1084,7 @@ def claim_device_from_form(
     device.claimed = True
     device.scope_type = target_scope_type
     device.scope_id = target_scope_id
-    device.device_profile_id = None
+    device.carrier_board_id = None
     device.secret = secrets.token_urlsafe(32)
     _upsert_labels_for_device(device, labels, db)
 
@@ -1106,7 +1098,7 @@ def update_fleet_device(
     request: Request,
     scope: str = Form(...),
     labels: str = Form(""),
-    device_profile_id: Optional[str] = Form(None),
+    carrier_board_id: Optional[str] = Form(None),
     firmware_override_id: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -1125,28 +1117,25 @@ def update_fleet_device(
     if not _has_scope_access(current_user, target_scope_type, target_scope_id):
         raise HTTPException(status_code=403, detail="You do not have permission to assign this scope.")
 
-    parsed_profile_id = _parse_optional_int(device_profile_id, "device_profile_id")
+    parsed_board_id = _parse_optional_int(carrier_board_id, "carrier_board_id")
     parsed_override_id = _parse_optional_int(firmware_override_id, "firmware_override_id")
 
-    profile = None
-    if parsed_profile_id is not None:
-        profile = db.query(DeviceProfile).filter(DeviceProfile.id == parsed_profile_id).first()
-        if not profile:
-            raise HTTPException(status_code=404, detail="Device profile not found.")
+    if parsed_board_id is not None:
+        if not db.query(CarrierBoard).filter(CarrierBoard.id == parsed_board_id).first():
+            raise HTTPException(status_code=404, detail="Carrier board not found.")
 
-    release = None
     if parsed_override_id is not None:
         release = db.query(FirmwareRelease).filter(FirmwareRelease.id == parsed_override_id).first()
         if not release:
             raise HTTPException(status_code=404, detail="Firmware release not found.")
-
-    effective_profile_id = parsed_profile_id if parsed_profile_id is not None else device.device_profile_id
-    if release and effective_profile_id and release.device_profile_id != effective_profile_id:
-        raise HTTPException(status_code=400, detail="Firmware profile mismatch for device.")
+        # Ensure the override firmware matches the device's carrier board.
+        effective_board_id = parsed_board_id if parsed_board_id is not None else device.carrier_board_id
+        if effective_board_id is not None and release.carrier_board_id != effective_board_id:
+            raise HTTPException(status_code=400, detail="Firmware carrier board mismatch for device.")
 
     device.scope_type = target_scope_type
     device.scope_id = target_scope_id
-    device.device_profile_id = parsed_profile_id
+    device.carrier_board_id = parsed_board_id
     device.firmware_override_id = parsed_override_id
     _upsert_labels_for_device(device, labels, db)
 
