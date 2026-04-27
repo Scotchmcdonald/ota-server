@@ -185,10 +185,24 @@ def _seed_default_carrier_board() -> None:
             return
 
         if not board:
-            db.add(CarrierBoard(
-                name=DEFAULT_CARRIER_BOARD_NAME,
-                description=DEFAULT_CARRIER_BOARD_DESCRIPTION,
-            ))
+            # Backward compatibility: some persisted DBs still have a required
+            # carrier_boards.tags column from older schemas.
+            board_cols = db.execute(text("PRAGMA table_info(carrier_boards)")).fetchall()
+            tags_is_required = any((row[1] == "tags" and int(row[3]) == 1) for row in board_cols)
+            if tags_is_required:
+                db.execute(
+                    text("INSERT INTO carrier_boards (name, description, tags) VALUES (:name, :description, :tags)"),
+                    {
+                        "name": DEFAULT_CARRIER_BOARD_NAME,
+                        "description": DEFAULT_CARRIER_BOARD_DESCRIPTION,
+                        "tags": "[]",
+                    },
+                )
+            else:
+                db.add(CarrierBoard(
+                    name=DEFAULT_CARRIER_BOARD_NAME,
+                    description=DEFAULT_CARRIER_BOARD_DESCRIPTION,
+                ))
             db.commit()
             return
 
@@ -946,7 +960,19 @@ def admin_add_hardware_profile(
     if db.query(CarrierBoard).filter(CarrierBoard.name == normalized_name).first():
         raise HTTPException(status_code=409, detail="Carrier board already exists.")
 
-    db.add(CarrierBoard(name=normalized_name, description=normalized_description))
+    board_cols = db.execute(text("PRAGMA table_info(carrier_boards)")).fetchall()
+    tags_is_required = any((row[1] == "tags" and int(row[3]) == 1) for row in board_cols)
+    if tags_is_required:
+        db.execute(
+            text("INSERT INTO carrier_boards (name, description, tags) VALUES (:name, :description, :tags)"),
+            {
+                "name": normalized_name,
+                "description": normalized_description,
+                "tags": "[]",
+            },
+        )
+    else:
+        db.add(CarrierBoard(name=normalized_name, description=normalized_description))
     db.commit()
     return RedirectResponse(url="/dashboard?top=admin&sub=hardware", status_code=status.HTTP_303_SEE_OTHER)
 
