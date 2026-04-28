@@ -1,0 +1,22 @@
+name: Trigger Overnight Factory
+
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  run-factory:
+    if: github.event.label.name == 'ai-factory'
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Factory Pipeline
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          source ~/ai-factory/venv/bin/activate
+          python main.py --issue $ISSUE_NUMBER

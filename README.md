@@ -64,6 +64,10 @@ If any check fails, response is **`204 No Content`**.
 - **Fleet Visibility & Telemetry**
   - Fleet tab shows device identity, reported firmware, check-in activity, and battery value (when parseable).
   - Supports unclaim and override actions from fleet operations view.
+- **Hardware Configuration UI**
+  - **Carrier PCBs:** Define carrier board architectures (connectors, sensors, power rails) for hardware profiles.
+  - **Compute Modules:** Inventory compute modules (e.g., ESP32-S3 variants) and bind them to carrier PCBs.
+  - **Release Binding:** Enforce hardware compatibility by linking firmware releases to specific hardware profiles.
 
 ### Security & Access Control
 - **Google OAuth 2.0 login flow** with callback handling and session cookie middleware.

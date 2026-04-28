@@ -506,8 +506,8 @@ def _evaluate_group_readiness(group: ApplicationGroup, firmware_name: str, firmw
             "group_id": group.id,
             "firmware_name": normalized_name,
             "firmware_version": normalized_version,
-            "status": "Preparing",
-            "ready": False,
+            "status": "N/A",
+            "ready": True,
             "required_combos": [],
             "missing_combos": [],
             "unknown_hardware_count": 0,
@@ -818,10 +818,9 @@ def access_add_email(
     email:   str = Form(...),
     note:    str = Form(""),
     db:      Session = Depends(get_db),
+    current_user: User = Depends(require_admin_user),
 ):
-    current_user = get_current_user_from_db(request, db)
-    if current_user.role != UserRole.Admin:
-        raise HTTPException(status_code=403, detail="Admin only.")
+    _ = current_user
     email = email.strip().lower()
     if not email or "@" not in email:
         raise HTTPException(status_code=400, detail="Invalid email address.")
@@ -837,10 +836,8 @@ def access_delete_email(
     entry_id: int,
     request:  Request,
     db:       Session = Depends(get_db),
+    current_user: User = Depends(require_admin_user),
 ):
-    current_user = get_current_user_from_db(request, db)
-    if current_user.role != UserRole.Admin:
-        raise HTTPException(status_code=403, detail="Admin only.")
     entry = db.query(AllowedEmail).filter(AllowedEmail.id == entry_id).first()
     if not entry:
         raise HTTPException(status_code=404, detail="Entry not found.")
@@ -858,10 +855,9 @@ def access_add_domain(
     domain:  str = Form(...),
     note:    str = Form(""),
     db:      Session = Depends(get_db),
+    current_user: User = Depends(require_admin_user),
 ):
-    current_user = get_current_user_from_db(request, db)
-    if current_user.role != UserRole.Admin:
-        raise HTTPException(status_code=403, detail="Admin only.")
+    _ = current_user
     domain = domain.strip().lower().lstrip("@")
     if not domain or "." not in domain:
         raise HTTPException(status_code=400, detail="Invalid domain (e.g. borealtek.ca).")
@@ -877,10 +873,8 @@ def access_delete_domain(
     entry_id: int,
     request:  Request,
     db:       Session = Depends(get_db),
+    _current_user: User = Depends(require_admin_user),
 ):
-    current_user = get_current_user_from_db(request, db)
-    if current_user.role != UserRole.Admin:
-        raise HTTPException(status_code=403, detail="Admin only.")
     entry = db.query(AllowedDomain).filter(AllowedDomain.id == entry_id).first()
     if not entry:
         raise HTTPException(status_code=404, detail="Entry not found.")
@@ -1389,14 +1383,10 @@ def check_update(
             last_checkin=datetime.utcnow(),
         ))
         db.commit()
-        return JSONResponse(status_code=202, content={
-            "update": False, "message": "Device registered and awaiting claiming."
-        })
+        return Response(status_code=204)
 
     if not device.claimed:
-        return JSONResponse(status_code=202, content={
-            "update": False, "message": "Device not yet claimed by an owner."
-        })
+        return Response(status_code=204)
 
     # ── Step 2: Authenticate ───────────────────────────────────────────────
     if not secrets.compare_digest(device.secret, x_device_secret):
@@ -1672,6 +1662,7 @@ def unclaim_device(
     device.claimed = False
     device.scope_type = None
     device.scope_id = None
+    device.carrier_board_id = None
     device.application_group_id = None
     device.firmware_override_id = None
     device.secret = "pending_claim"

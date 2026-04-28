@@ -321,10 +321,7 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-800/50 bg-slate-900/20">
-                        {% for node in fleet_nodes|default([
-                            {'mac': 'F0:E1:D2:C3:B4:A5', 'scope': 'Personal', 'scope_slug': 'personal', 'labels': ['testing', 'v1-hw'], 'fw': 'v1.4.1', 'batt': 88, 'status': 'online', 'carrier_board_id': 1, 'firmware_override_id': None},
-                            {'mac': '11:22:33:44:55:66', 'scope': 'Team Alpha', 'scope_slug': 'team-alpha', 'labels': ['production'], 'fw': 'v1.4.2', 'batt': 14, 'status': 'offline', 'carrier_board_id': None, 'firmware_override_id': None}
-                        ]) %}
+                        {% for node in fleet_nodes %}
                         <tr class="hover:bg-slate-800/40 transition-colors device-row" data-scope="{{ node.scope_slug|lower }}" data-labels="{{ node.labels|join(',')|lower }}" data-view-context="{{ 'personal' if node.scope_slug == 'personal' else 'teams' }}">
                             <td class="px-6 py-4 whitespace-nowrap text-sky-300 font-mono text-sm tracking-widest">{{ node.mac }}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-slate-400 text-xs uppercase">{{ node.scope }}</td>
@@ -373,6 +370,10 @@
                                     </form>
                                 </div>
                             </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="9" class="px-6 py-12 text-center text-slate-500 font-mono text-sm tracking-widest">NO CLAIMED NODES IN YOUR SCOPE</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -810,7 +811,9 @@
                 </button>
             </div>
             
-            <form action="/api/claim" method="POST" id="claim-form" class="space-y-5">
+            <form action="/api/claim" method="POST" id="claim-form"
+                  class="space-y-5 admin-guard-form"
+                  data-success-redirect="/dashboard?top=devices&sub=onboard">
                 <div>
                     <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Target MAC</label>
                     <input type="text" id="claim-mac" name="mac" readonly class="w-full bg-slate-900/80 border border-slate-700 rounded py-2 px-3 text-sm font-mono text-sky-400 outline-none cursor-not-allowed">
