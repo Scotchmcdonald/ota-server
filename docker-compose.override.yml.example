@@ -1,0 +1,12 @@
+## Copy this file to docker-compose.override.yml (gitignored) and fill in real
+## values for this deployment. docker compose automatically merges an
+## override.yml alongside docker-compose.yml, so this keeps real secrets out
+## of the tracked base file.
+services:
+  ota-server:
+    environment:
+      - GOOGLE_CLIENT_ID=
+      - GOOGLE_CLIENT_SECRET=
+      - GOOGLE_OAUTH_REDIRECT_URI=https://YOUR_DOMAIN/auth
+      - ADMIN_EMAILS=you@example.com
+      - SESSION_SECRET_KEY=

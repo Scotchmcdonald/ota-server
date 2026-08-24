@@ -1,0 +1,20 @@
+# Secrets - real values live in docker-compose.override.yml / .env, never commit them
+docker-compose.override.yml
+.env
+*.env
+!.env.example
+
+# Runtime data (firmware binaries, sqlite db)
+data/*
+!data/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# OS/editor cruft
+.DS_Store
+Thumbs.db

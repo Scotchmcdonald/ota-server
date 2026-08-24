@@ -17,6 +17,15 @@ class ScopeType(enum.Enum):
     Personal = "Personal"
     Team = "Team"
 
+class ReleaseStatus(enum.Enum):
+    Staging = "Staging"    # Uploaded, unversioned, awaiting admin approval or rejection.
+    Approved = "Approved"  # Has a real version, eligible for normal fleet resolution.
+    Rejected = "Rejected"  # Kept for history/audit; never served or listed as active.
+
+class UpdateMode(enum.Enum):
+    LATEST = "LATEST"  # Device/Fleet always tracks the newest matching release.
+    FIXED = "FIXED"    # Device/Fleet targets one specific firmware name + version.
+
 # =============================================================================
 # Association Tables
 # =============================================================================
@@ -28,18 +37,27 @@ user_team_association = Table(
     Column("team_id", Integer, ForeignKey("teams.id", ondelete="CASCADE"), primary_key=True)
 )
 
-device_label_association = Table(
-    "device_label",
+# Junction tables for tags use indexed FK columns rather than a JSON column so
+# SQLite can efficiently answer subset-match and exact-match tag comparisons.
+device_tag_association = Table(
+    "device_tag",
     Base.metadata,
     Column("device_id", Integer, ForeignKey("devices.id", ondelete="CASCADE"), primary_key=True),
-    Column("label_id", Integer, ForeignKey("labels.id", ondelete="CASCADE"), primary_key=True)
+    Column("tag_id", Integer, ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True)
 )
 
-firmware_label_association = Table(
-    "firmware_label",
+fleet_tag_association = Table(
+    "fleet_tag",
     Base.metadata,
-    Column("firmware_id", Integer, ForeignKey("firmware.id", ondelete="CASCADE"), primary_key=True),
-    Column("label_id", Integer, ForeignKey("labels.id", ondelete="CASCADE"), primary_key=True)
+    Column("fleet_id", Integer, ForeignKey("fleets.id", ondelete="CASCADE"), primary_key=True),
+    Column("tag_id", Integer, ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True)
+)
+
+versioned_release_tag_association = Table(
+    "versioned_release_tag",
+    Base.metadata,
+    Column("release_id", Integer, ForeignKey("versioned_releases.id", ondelete="CASCADE"), primary_key=True),
+    Column("tag_id", Integer, ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True)
 )
 
 # =============================================================================
@@ -64,7 +82,6 @@ class Team(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     members = relationship("User", secondary=user_team_association, back_populates="teams")
-    application_groups = relationship("ApplicationGroup", back_populates="team", cascade="all, delete-orphan")
 
 class APIKey(Base):
     __tablename__ = "api_keys"
@@ -80,15 +97,20 @@ class APIKey(Base):
     
     user = relationship("User", back_populates="api_tokens")
 
-class Label(Base):
-    __tablename__ = "labels"
+class Tag(Base):
+    __tablename__ = "tags"
+    __table_args__ = (
+        UniqueConstraint("category", "name", name="uq_tag_category_name"),
+    )
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True, nullable=False)
+    category = Column(String, nullable=False, default="custom")
     color = Column(String, nullable=False, default="#3b82f6")
 
     # Relationships
-    devices = relationship("Device", secondary=device_label_association, back_populates="labels")
-    firmwares = relationship("Firmware", secondary=firmware_label_association, back_populates="labels")
+    devices = relationship("Device", secondary=device_tag_association, back_populates="tags")
+    fleets = relationship("Fleet", secondary=fleet_tag_association, back_populates="tags")
+    versioned_releases = relationship("VersionedRelease", secondary=versioned_release_tag_association, back_populates="tags")
 
 class Device(Base):
     __tablename__ = "devices"
@@ -96,64 +118,122 @@ class Device(Base):
     mac_address = Column(String, unique=True, index=True, nullable=False)
     nickname = Column(String, nullable=True)
     secret = Column(String, nullable=False)
-    device_class = Column(String, index=True, nullable=False)
-    version = Column(String)
     battery = Column(Integer, nullable=True)
     last_checkin = Column(DateTime, default=datetime.utcnow)
     last_ota_status = Column(String)
+
+    # Currently-installed firmware version, self-reported by the device on
+    # every check-in. Used for dashboard display and fleet audit history.
+    current_firmware_version = Column(String, nullable=True)
     
     # Ownership & Claiming
     claimed = Column(Boolean, default=False, nullable=False)
     scope_id = Column(Integer, nullable=True, index=True)
     scope_type = Column(Enum(ScopeType), nullable=True, index=True)
 
-    # Socketed Compute Fields
+    # Fleet assignment (standalone when NULL, or belongs to one Fleet).
+    fleet_id = Column(Integer, ForeignKey("fleets.id", ondelete="SET NULL"), nullable=True, index=True)
+
+    # Compute module (ESP hardware type, e.g. S2/S3/C2).
     compute_module = Column(String, nullable=True)
-    class_name = Column(String, index=True, nullable=True)
-    group_name = Column(String, index=True, nullable=True)
 
-    # Cascading OTA Resolution
-    carrier_board_id = Column(Integer, ForeignKey("carrier_boards.id", ondelete="SET NULL"), nullable=True, index=True)
-    application_group_id = Column(Integer, ForeignKey("application_groups.id", ondelete="SET NULL"), nullable=True, index=True)
-    firmware_override_id = Column(Integer, ForeignKey("firmware_releases.id", ondelete="SET NULL"), nullable=True, index=True)
+    # OTA update mode and target resolution.
+    update_mode = Column(Enum(UpdateMode), default=UpdateMode.LATEST, nullable=False)
+    target_firmware_name = Column(String, nullable=True)
+    target_firmware_version = Column(String, nullable=True)
 
-    labels = relationship("Label", secondary=device_label_association, back_populates="devices")
-    carrier_board = relationship("CarrierBoard", back_populates="devices", foreign_keys=[carrier_board_id])
-    application_group = relationship("ApplicationGroup", back_populates="devices", foreign_keys=[application_group_id])
-    firmware_override = relationship("FirmwareRelease", foreign_keys=[firmware_override_id])
+    # Heartbeat polling interval in seconds (default 60).
+    heartbeat_interval = Column(Integer, default=60, nullable=False)
 
-class Firmware(Base):
-    __tablename__ = "firmware"
+    # Direct assignment to a One-Shot release; used alongside versioned-release
+    # targeting to let a standalone device pin to either release tier.
+    target_oneshot_release_id = Column(Integer, ForeignKey("one_shot_releases.id", ondelete="SET NULL"), nullable=True, index=True)
+
+    # Relationships
+    fleet = relationship("Fleet", back_populates="devices")
+    tags = relationship("Tag", secondary=device_tag_association, back_populates="devices")
+    target_oneshot_release = relationship("OneShotRelease", foreign_keys=[target_oneshot_release_id])
+
+class Fleet(Base):
+    __tablename__ = "fleets"
     id = Column(Integer, primary_key=True, index=True)
-    device_class = Column(String, index=True, nullable=False)
-    version = Column(String, index=True, nullable=False)
-    file_path = Column(String, nullable=False)
-    upload_timestamp = Column(DateTime, default=datetime.utcnow)
-    
-    # Ownership
-    scope_id = Column(Integer, nullable=True, index=True)
-    scope_type = Column(Enum(ScopeType), nullable=True, index=True)
-    
-    labels = relationship("Label", secondary=firmware_label_association, back_populates="firmwares")
-
-
-# =============================================================================
-# Hardware Profile & Cascading OTA Models
-# =============================================================================
-
-class CarrierBoard(Base):
-    """
-    Describes a specific carrier PCB that an ESP32 compute module plugs into.
-    Firmware is bound to a carrier PCB at upload time, preventing cross-profile deploys.
-    """
-    __tablename__ = "carrier_boards"
-
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, nullable=False, index=True)  # e.g. "FeatherS3_EnvSensor"
+    name = Column(String, nullable=False, index=True)
     description = Column(String, nullable=True)
 
-    firmware_releases = relationship("FirmwareRelease", back_populates="carrier_board")
-    devices = relationship("Device", back_populates="carrier_board")
+    # OTA update mode and target resolution (same semantics as Device).
+    update_mode = Column(Enum(UpdateMode), default=UpdateMode.LATEST, nullable=False)
+    target_firmware_name = Column(String, nullable=True)
+    target_firmware_version = Column(String, nullable=True)
+
+    # Direct assignment to a One-Shot release (same reason as on Device).
+    target_oneshot_release_id = Column(Integer, ForeignKey("one_shot_releases.id", ondelete="SET NULL"), nullable=True)
+
+    # Ownership scoping (consistent with Device's scope_id/scope_type pattern).
+    scope_id = Column(Integer, nullable=True, index=True)
+    scope_type = Column(Enum(ScopeType), nullable=True, index=True)
+
+    # Relationships
+    devices = relationship("Device", back_populates="fleet")
+    tags = relationship("Tag", secondary=fleet_tag_association, back_populates="fleets")
+
+# =============================================================================
+# Firmware Models (Versioned & One-Shot)
+# =============================================================================
+
+class VersionedRelease(Base):
+    """
+    A versioned firmware binary with approval lifecycle and tag-based resolution.
+    """
+    __tablename__ = "versioned_releases"
+    __table_args__ = (
+        UniqueConstraint("firmware_name", "firmware_version", "compute_module", name="uq_versioned_release_target"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    firmware_name = Column(String, nullable=False, index=True)
+    firmware_version = Column(String, nullable=True, index=True)
+    status = Column(Enum(ReleaseStatus), default=ReleaseStatus.Staging, nullable=False, index=True)
+    file_path = Column(String, nullable=False)
+    compute_module = Column(String, nullable=False, index=True)
+    upload_timestamp = Column(DateTime, default=datetime.utcnow)
+
+    tags = relationship("Tag", secondary=versioned_release_tag_association, back_populates="versioned_releases")
+
+
+class OneShotRelease(Base):
+    """
+    A rapid-prototyping firmware upload with no SemVer or approval lifecycle.
+    Searchable only by upload date and ESP compute module type.
+    """
+    __tablename__ = "one_shot_releases"
+    id = Column(Integer, primary_key=True, index=True)
+    filename = Column(String, nullable=False)
+    upload_date = Column(DateTime, default=datetime.utcnow)
+    compute_module = Column(String, nullable=False, index=True)
+    notes = Column(String, nullable=True)
+
+    # Ownership scoping (mirrored from the old Firmware class).
+    scope_id = Column(Integer, nullable=True, index=True)
+    scope_type = Column(Enum(ScopeType), nullable=True, index=True)
+
+# =============================================================================
+# Access Control
+# =============================================================================
+
+class AllowedEmail(Base):
+    __tablename__ = "allowed_emails"
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, nullable=False, index=True)
+    note = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class AllowedDomain(Base):
+    __tablename__ = "allowed_domains"
+    id = Column(Integer, primary_key=True, index=True)
+    domain = Column(String, unique=True, nullable=False, index=True)
+    note = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class ComputeModule(Base):
@@ -163,78 +243,5 @@ class ComputeModule(Base):
     Removal is blocked if any device or firmware release references the value.
     """
     __tablename__ = "compute_modules"
-
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, nullable=False, index=True)  # e.g. "ESP32-S3-WROOM-1"
-
-
-class FirmwareRelease(Base):
-    """
-    A versioned firmware binary rigidly associated with one CarrierBoard.
-    This is the authoritative record for any OTA resolution.
-    """
-    __tablename__ = "firmware_releases"
-    __table_args__ = (
-        UniqueConstraint("firmware_name", "firmware_version", "compute_module", "carrier_board_id", name="uq_release_target"),
-    )
-
-    id = Column(Integer, primary_key=True, index=True)
-    firmware_name = Column(String, nullable=False, index=True)      # e.g. "Sparkle"
-    firmware_version = Column(String, nullable=False, index=True)   # e.g. "3.0.0"
-    file_path = Column(String, nullable=False)
-
-    compute_module = Column(String, nullable=False, index=True)     # e.g. "ESP32-S3-WROOM-1"
-    carrier_board_id = Column(Integer, ForeignKey("carrier_boards.id"), nullable=False, index=True)
-    
-    upload_timestamp = Column(DateTime, default=datetime.utcnow)
-
-    carrier_board = relationship("CarrierBoard", back_populates="firmware_releases")
-    application_groups = relationship("ApplicationGroup", back_populates="target_release")
-
-
-class AllowedEmail(Base):
-    """
-    An explicitly permitted Google account email address.
-    Checked at OAuth callback time. Managed at runtime by Admins.
-    """
-    __tablename__ = "allowed_emails"
-
-    id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, unique=True, nullable=False, index=True)   # Stored lowercase.
-    note = Column(String, nullable=True)                               # Optional label, e.g. "Scott - BorealTek"
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-
-class AllowedDomain(Base):
-    """
-    A wildcard domain rule, e.g. 'borealtek.ca'.
-    Any Google account whose email ends in @<domain> is permitted.
-    Managed at runtime by Admins.
-    """
-    __tablename__ = "allowed_domains"
-
-    id = Column(Integer, primary_key=True, index=True)
-    domain = Column(String, unique=True, nullable=False, index=True)  # Stored lowercase, no leading @.
-    note = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-
-class ApplicationGroup(Base):
-    """
-    A logical fleet segment owned by a team.
-    Defines the production firmware target for all member devices unless
-    a device-level firmware_override is set.
-    """
-    __tablename__ = "application_groups"
-
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False, index=True)               # e.g. "Outdoor Sensors"
-    team_id = Column(Integer, ForeignKey("teams.id", ondelete="CASCADE"), nullable=False, index=True)
-    target_firmware_name = Column(String, nullable=True, index=True)
-    target_firmware_version = Column(String, nullable=True, index=True)
-    # Nullable: a group may exist before any firmware is designated.
-    target_release_id = Column(Integer, ForeignKey("firmware_releases.id", ondelete="SET NULL"), nullable=True, index=True)
-
-    team = relationship("Team", back_populates="application_groups")
-    target_release = relationship("FirmwareRelease", back_populates="application_groups", foreign_keys=[target_release_id])
-    devices = relationship("Device", back_populates="application_group")
+    name = Column(String, unique=True, nullable=False, index=True)
