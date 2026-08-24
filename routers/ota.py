@@ -1,4 +1,5 @@
 import os
+import secrets
 from datetime import datetime
 from typing import Optional
 
@@ -8,7 +9,7 @@ from packaging.version import parse as parse_version
 from sqlalchemy.orm import Session
 
 from database import get_db, FIRMWARE_DIR
-from utils import is_newer_version, _tag_gap, _sync_hardware_tag
+from utils import is_newer_version, _tag_gap
 from models import Device, OneShotRelease, VersionedRelease, ReleaseStatus, UpdateMode
 
 router = APIRouter()
@@ -65,7 +66,6 @@ def check_update(
             device.heartbeat_interval = int(x_heartbeat_interval)
         except ValueError:
             pass
-    _sync_hardware_tag(device, db)
     db.commit()
 
     # Step 4/5: Resolution (Priority 0, 1)

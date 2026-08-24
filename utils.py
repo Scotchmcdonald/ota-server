@@ -93,33 +93,6 @@ def _upsert_tags_for_device(device: Device, tags_csv: str, db: Session, actor_is
     device.tags = resolved_tags
 
 
-def _sync_hardware_tag(device: Device, db: Session) -> None:
-    """
-    The 'hardware' tag category is system-derived from the device's own
-    self-reported compute_module (set from the X-Compute-Module header on
-    every /check-update call) — it is never settable by an operator.
-
-    This is called after every claim/manage-device form submission to strip
-    any hardware-category tag a human tried to attach and replace it with
-    the device's real, self-reported one. It's also called on every
-    /check-update so the tag stays in sync if a device is ever reflashed
-    onto different hardware.
-    """
-    device.tags = [t for t in (device.tags or []) if t.category != "hardware"]
-
-    compute_module = (device.compute_module or "").strip()
-    if not compute_module:
-        return
-
-    tag = db.query(Tag).filter(Tag.name == compute_module, Tag.category == "hardware").first()
-    if not tag:
-        tag = Tag(name=compute_module, category="hardware", color="#0ea5e9")
-        db.add(tag)
-        db.flush()
-    if tag not in device.tags:
-        device.tags.append(tag)
-
-
 def is_newer_version(v1: str, v2: str) -> bool:
     """Returns True if v1 is semantically newer than v2."""
     try:
