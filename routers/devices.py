@@ -10,7 +10,7 @@ from database import get_db
 from deps import get_current_user, require_admin, has_scope_permission, _resolve_scope_selection, _scope_slug
 from utils import _parse_optional_int, _upsert_tags_for_device, TAG_CATEGORIES
 from schemas import ClaimDevicePayload
-from models import Device, Fleet, Tag, UpdateMode, ScopeType, User, UserRole, OneShotRelease
+from models import Device, Fleet, Tag, UpdateMode, ScopeType, User, UserRole, OneShotRelease, VersionedRelease
 from auth import get_current_user_from_db, get_current_user_scopes
 
 router = APIRouter()

@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 
-from models import User, Team, APIKey, ComputeModule, VersionedRelease, OneShotRelease, UserRole, AllowedEmail, AllowedDomain
+from models import User, Team, APIKey, ComputeModule, VersionedRelease, OneShotRelease, UserRole, AllowedEmail, AllowedDomain, Device
 from auth import hash_api_key
 from database import get_db
 from deps import get_current_user, require_admin

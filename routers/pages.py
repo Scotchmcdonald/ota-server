@@ -132,7 +132,6 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
 
     # Fleet Audit: group claimed devices by (tag names, compute_module) per fleet
     fleet_audit: dict = {}
-    fleet_by_id = {f.id: f for f in fleets}
     for device in visible_claimed_devices:
         if not device.fleet_id:
             continue
