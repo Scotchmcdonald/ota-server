@@ -121,7 +121,6 @@ def update_fleet_device(
     target_firmware_name: Optional[str] = Form(None),
     target_firmware_version: Optional[str] = Form(None),
     target_oneshot_release_id: Optional[str] = Form(None),
-    heartbeat_interval: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -167,9 +166,6 @@ def update_fleet_device(
             if not db.query(OneShotRelease).filter(OneShotRelease.id == ones_id).first():
                 raise HTTPException(status_code=404, detail="OneShot release not found.")
             device.target_oneshot_release_id = ones_id
-    if heartbeat_interval is not None and heartbeat_interval.strip():
-        device.heartbeat_interval = int(heartbeat_interval.strip())
-
     flat_tags = [name for names in tags_by_cat.values() for name in names]
     _upsert_tags_for_device(device, flat_tags, db, actor_is_admin=current_user.role == UserRole.Admin)
 

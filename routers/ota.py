@@ -22,6 +22,7 @@ def check_update(
     x_firmware_version: Optional[str] = Header(default=None),
     x_device_battery:   Optional[str] = Header(default=None),
     x_compute_module:   Optional[str] = Header(default=None),
+    x_heartbeat_interval: Optional[str] = Header(default=None),
     db:                 Session        = Depends(get_db),
 ):
     if not all([x_device_mac, x_device_secret, x_firmware_version]):
@@ -57,6 +58,11 @@ def check_update(
     if x_device_battery is not None:
         try:
             device.battery = int(x_device_battery)
+        except ValueError:
+            pass
+    if x_heartbeat_interval is not None:
+        try:
+            device.heartbeat_interval = int(x_heartbeat_interval)
         except ValueError:
             pass
     _sync_hardware_tag(device, db)
