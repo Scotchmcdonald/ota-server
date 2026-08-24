@@ -1104,21 +1104,16 @@
                 </div>
 
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Initial Tags</label>
-                    <div class="space-y-2">
-                        {% for cat in tag_categories|default(["hardware", "firmware_compat", "firmware_feature", "firmware_build", "role", "custom"]) %}
-                        <div class="flex items-center gap-2">
-                            <label class="text-[9px] font-bold text-slate-500 uppercase min-w-[95px]">{{ cat }}</label>
-                            <div class="claim-category-tags" data-category="{{ cat }}"></div>
-                            <div style="display: flex; gap: 4px;">
-                                <input type="text" class="flex-1 min-w-0 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 placeholder-slate-500 focus:ring-1 focus:ring-amber-500 outline-none tag-category-input" data-category="{{ cat }}" data-selected-tags="[]" placeholder="Add tag...">
-                                <button type="button" class="claim-tag-add-btn px-1.5 py-1 text-[9px] bg-sky-600 text-white rounded hover:bg-sky-500 transition-colors" data-category="{{ cat }}">+</button>
-                                <button type="button" class="claim-tag-create-btn px-1.5 py-1 text-[9px] text-amber-300 hover:text-amber-200 transition-colors" data-category="{{ cat }}">[New]</button>
-                            </div>
-                        </div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">ESP32 Hardware Type</label>
+                    <input type="text" name="hardware_type" list="claim-hardware-type-options" required
+                           placeholder="e.g. S3, C3, C6..."
+                           class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-sky-500 outline-none placeholder-slate-500">
+                    <datalist id="claim-hardware-type-options">
+                        {% for tag in all_tags if tag.category == "hardware" %}
+                        <option value="{{ tag.name }}">
                         {% endfor %}
-                    </div>
-                    <input type="hidden" name="tags_json" id="claim-tags-json" value="">
+                    </datalist>
+                    <p class="text-[10px] text-slate-500 mt-1">Immutable once claimed. All other tags (location, purpose, carrier board, etc.) are assigned later from Manage Device or the Fleet view.</p>
                 </div>
                 
                 <div class="pt-2 flex gap-3">
@@ -1683,21 +1678,6 @@
                         }
                     }
                     
-                    // Populate tags_json from category inputs if this is the claim form
-                    if (form.id === 'claim-form') {
-                        const tagsByCategory = {};
-                        document.querySelectorAll('#claim-modal .tag-category-input').forEach(input => {
-                            const cat = input.dataset.category;
-                            const selected = JSON.parse(input.dataset.selectedTags || '[]');
-                            if (selected.length > 0) {
-                                tagsByCategory[cat] = selected.map(t => t.name);
-                            }
-                        });
-                        const tagsJsonEl = document.getElementById('claim-tags-json');
-                        if (tagsJsonEl) {
-                            tagsJsonEl.value = JSON.stringify(tagsByCategory);
-                        }
-                    }
                     e.preventDefault();
                     await submitAdminGuardForm(form);
                 });
@@ -2072,8 +2052,6 @@
             
             handleTagAdd('tag-add-btn', false);
             handleTagCreate('tag-create-btn', false);
-            handleTagAdd('claim-tag-add-btn', true);
-            handleTagCreate('claim-tag-create-btn', true);
             handleTagAdd('firmware-tag-add-btn', false);
             handleTagCreate('firmware-tag-create-btn', false);
         });

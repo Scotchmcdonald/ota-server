@@ -58,20 +58,16 @@ def claim_device_from_form(
     request: Request,
     mac: str = Form(...),
     scope: str = Form(...),
-    tags: str = Form(""),
-    tags_json: str = Form(""),
+    hardware_type: str = Form(...),
     fleet_id: Optional[str] = Form(None),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     _ = request
 
-    if tags_json:
-        try:
-            tags_by_cat = json.loads(tags_json)
-        except (ValueError, TypeError):
-            tags_by_cat = {}
-    else:
-        tags_by_cat = {"custom": [t.strip() for t in tags.split(",") if t.strip()]}
+    hardware_type = hardware_type.strip()
+    if not hardware_type:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ESP hardware type is required to claim a device.")
 
     device = db.query(Device).filter(Device.mac_address == mac).first()
     if not device:
@@ -79,8 +75,8 @@ def claim_device_from_form(
     if device.claimed:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Device is already claimed.")
 
-    target_scope_type, target_scope_id, _ = _resolve_scope_selection(scope, user, db)
-    if not has_scope_permission(user, target_scope_type, target_scope_id):
+    target_scope_type, target_scope_id, _ = _resolve_scope_selection(scope, current_user, db)
+    if not has_scope_permission(current_user, target_scope_type, target_scope_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to claim hardware into this scope.",
@@ -97,13 +93,12 @@ def claim_device_from_form(
     device.fleet_id = parsed_fleet_id
     device.secret = secrets.token_urlsafe(32)
 
-    flat_tags = [name for names in tags_by_cat.values() for name in names]
-    _upsert_tags_for_device(device, flat_tags, db, actor_is_admin=False)
-
-    for cat, tag_names in tags_by_cat.items():
-        for t in device.tags or []:
-            if t.name in tag_names:
-                t.category = cat
+    # Claim only sets the device's immutable hardware type. Every other tag
+    # is assigned later via Manage Device / Fleet tooling, not at enrollment.
+    _upsert_tags_for_device(device, [hardware_type], db, actor_is_admin=current_user.role == UserRole.Admin)
+    for t in device.tags or []:
+        if t.name == hardware_type:
+            t.category = "hardware"
 
     db.commit()
     return RedirectResponse(url="/dashboard?top=devices&sub=onboard", status_code=status.HTTP_303_SEE_OTHER)
