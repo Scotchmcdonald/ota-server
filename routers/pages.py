@@ -70,6 +70,18 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         for release in staging_versioned_release_rows
     ]
 
+    approved_release_rows = [
+        {
+            "id": release.id,
+            "firmware_name": release.firmware_name,
+            "firmware_version": release.firmware_version,
+            "compute_module": release.compute_module,
+            "tags": [{"name": t.name, "category": t.category, "color": t.color} for t in (release.tags or [])],
+            "upload_timestamp": release.upload_timestamp,
+        }
+        for release in versioned_releases
+    ]
+
     teams = db.query(Team).all()
     team_name_by_id = {team.id: team.name for team in teams}
 
@@ -160,7 +172,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             "user":                 session_user,
             "db_user":              user_info,
             "devices":              visible_claimed_devices,
-            "versioned_releases":   versioned_releases,
+            "versioned_releases":   approved_release_rows,
             "staging_versioned_release_rows": staging_release_rows,
             "api_tokens":           api_tokens,
             "new_key":              new_key,
