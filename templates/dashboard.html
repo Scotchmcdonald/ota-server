@@ -175,6 +175,7 @@
                             <th class="px-6 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Compute Module</th>
                             <th class="px-6 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Tags</th>
                             <th class="px-6 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Uploaded</th>
+                            <th class="px-6 py-3 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-800/50 text-xs bg-slate-900/20">
@@ -201,11 +202,16 @@
                                 >
                                     Manage Tags
                                 </button>
+                                {% if rel.is_stale %}
+                                <form action="/api/releases/{{ rel.id }}/purge" method="POST" class="inline admin-guard-form ml-1" data-confirm="Purge {{ rel.firmware_name }} {{ rel.firmware_version }}? It will be marked Rejected but never served." data-success-redirect="/dashboard?top=firmware&sub=warehouse">
+                                    <button type="submit" class="px-2 py-1 text-[9px] font-bold tracking-widest uppercase rounded bg-rose-900/40 text-rose-300 border border-rose-700/50 hover:bg-rose-600 hover:text-white transition-all">Purge</button>
+                                </form>
+                                {% endif %}
                             </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="6" class="px-6 py-8 text-center text-slate-500 font-mono">No releases uploaded yet.</td>
+                            <td colspan="7" class="px-6 py-8 text-center text-slate-500 font-mono">No releases uploaded yet.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -1263,8 +1269,10 @@
                         </div>
                         <div>
                             <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Target Firmware Version</label>
-                            <input type="text" id="manage-device-target-firmware-version" name="target_firmware_version" placeholder="e.g. 1.2.3" class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none placeholder-slate-500">
+                            <input type="text" id="manage-device-target-firmware-version" name="target_firmware_version" placeholder="e.g. 1.2.3" list="available-firmware-versions" class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none placeholder-slate-500">
                         </div>
+                        <datalist id="available-firmware-versions">
+                        </datalist>
                         <div>
                             <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">One-Shot Release ID</label>
                             <input type="number" id="manage-device-target-oneshot" name="target_oneshot_release_id" placeholder="Release ID or leave empty" min="0" class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none placeholder-slate-500">
@@ -1805,6 +1813,13 @@
 
         const firmwareVersionsByName = {{ firmware_versions_by_name | tojson }};
 
+        // Refresh the device manage modal datalist when the firmware name changes
+        const manageDeviceNameInput = document.getElementById('manage-device-target-firmware-name');
+        if (manageDeviceNameInput) {
+            manageDeviceNameInput.addEventListener('input', refreshManageDeviceDatalist);
+            manageDeviceNameInput.addEventListener('change', refreshManageDeviceDatalist);
+        }
+
         // ====== FLEET DEPLOY / GAP ANALYSIS (live, no page reload) ======
         // Mirrors the old Group Staging readiness-check pattern: preview
         // fetches a live gap analysis and updates the summary in place; the
@@ -2003,6 +2018,21 @@
             }, 200);
         }
 
+        function refreshManageDeviceDatalist() {
+            const nameInput = document.getElementById('manage-device-target-firmware-name');
+            const datalist = document.getElementById('available-firmware-versions');
+            if (!nameInput || !datalist) return;
+            const name = nameInput.value.trim();
+            datalist.innerHTML = '';
+            if (name && firmwareVersionsByName[name]) {
+                for (const version of firmwareVersionsByName[name]) {
+                    const opt = document.createElement('option');
+                    opt.value = version;
+                    datalist.appendChild(opt);
+                }
+            }
+        }
+
         function openManageDeviceModal(mac, scope, tags, fleetId, tagsByCategory, targetOneshotReleaseId, updateMode, targetFirmwareName, targetFirmwareVersion, heartbeatInterval) {
             if (manageDeviceMacInput) manageDeviceMacInput.value = mac || '';
             if (manageDeviceScopeInput) manageDeviceScopeInput.value = scope || 'personal';
@@ -2047,6 +2077,8 @@
             
             const targetFirmwareNameInput = document.getElementById('manage-device-target-firmware-name');
             if (targetFirmwareNameInput) targetFirmwareNameInput.value = targetFirmwareName || '';
+            
+            refreshManageDeviceDatalist();
             
             const targetFirmwareVersionInput = document.getElementById('manage-device-target-firmware-version');
             if (targetFirmwareVersionInput) targetFirmwareVersionInput.value = targetFirmwareVersion || '';

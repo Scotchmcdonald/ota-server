@@ -70,17 +70,24 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         for release in staging_versioned_release_rows
     ]
 
-    approved_release_rows = [
-        {
+    approved_release_rows = []
+    for release in versioned_releases:
+        is_stale = any(
+            parse_version(other.firmware_version) > parse_version(release.firmware_version)
+            for other in versioned_releases
+            if other.id != release.id
+            and other.firmware_name == release.firmware_name
+            and other.compute_module == release.compute_module
+        )
+        approved_release_rows.append({
             "id": release.id,
             "firmware_name": release.firmware_name,
             "firmware_version": release.firmware_version,
             "compute_module": release.compute_module,
             "tags": [{"name": t.name, "category": t.category, "color": t.color} for t in (release.tags or [])],
             "upload_timestamp": release.upload_timestamp,
-        }
-        for release in versioned_releases
-    ]
+            "is_stale": is_stale,
+        })
 
     teams = db.query(Team).all()
     team_name_by_id = {team.id: team.name for team in teams}

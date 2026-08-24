@@ -12,7 +12,7 @@ from packaging.version import parse as parse_version
 from database import get_db, FIRMWARE_DIR
 from deps import require_admin, get_current_user, _scope_slug
 from utils import TAG_CATEGORIES, _sanitize_field, _resolve_compute_module_name
-from models import VersionedRelease, OneShotRelease, ReleaseStatus, ComputeModule, Tag, User
+from models import VersionedRelease, OneShotRelease, ReleaseStatus, ComputeModule, Tag, User, Device, Fleet
 
 router = APIRouter()
 
@@ -363,3 +363,36 @@ def reject_release(
     release.status = ReleaseStatus.Rejected
     db.commit()
     return {"message": "Release rejected.", "firmware_release_id": release.id, "status": release.status.value}
+
+
+@router.post("/api/releases/{release_id}/purge")
+def purge_release(
+    release_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Purges an Approved release by marking it Rejected. Rejects if any device or fleet is pinned to this version."""
+    _ = current_user
+    release = db.query(VersionedRelease).filter(VersionedRelease.id == release_id).first()
+    if not release:
+        raise HTTPException(status_code=404, detail="Versioned release not found.")
+    if release.status != ReleaseStatus.Approved:
+        raise HTTPException(status_code=400, detail=f"Only Approved releases can be purged (status={release.status.value}).")
+
+    pinned_device = db.query(Device).filter(
+        Device.target_firmware_name == release.firmware_name,
+        Device.target_firmware_version == release.firmware_version,
+    ).first()
+    if pinned_device:
+        raise HTTPException(status_code=400, detail=f"Cannot purge: device {pinned_device.mac_address} is pinned to {release.firmware_name} {release.firmware_version}.")
+
+    pinned_fleet = db.query(Fleet).filter(
+        Fleet.target_firmware_name == release.firmware_name,
+        Fleet.target_firmware_version == release.firmware_version,
+    ).first()
+    if pinned_fleet:
+        raise HTTPException(status_code=400, detail=f"Cannot purge: fleet '{pinned_fleet.name}' is pinned to {release.firmware_name} {release.firmware_version}.")
+
+    release.status = ReleaseStatus.Rejected
+    db.commit()
+    return {"message": "Release purged.", "firmware_release_id": release.id, "status": release.status.value}
