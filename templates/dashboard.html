@@ -116,28 +116,30 @@
                     <thead class="bg-slate-900/50">
                         <tr>
                             <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Target MAC</th>
+                            <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Reported Compute Module</th>
                             <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Initial Ping</th>
                             <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>
                             <th class="px-6 py-4 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Action</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-800/50 text-sm bg-slate-900/20">
-                        {% for device in unclaimed_devices|default([{'mac_address': 'A0:B1:C2:D3:E4:F5', 'last_seen': '2 mins ago'}]) %}
+                        {% for device in unclaimed_devices|default([{'mac_address': 'A0:B1:C2:D3:E4:F5', 'last_seen': '2 mins ago', 'compute_module': 'Unknown'}]) %}
                         <tr class="hover:bg-slate-800/40 transition-colors">
                             <td class="px-6 py-4 whitespace-nowrap text-amber-400 font-mono text-sm tracking-widest">{{ device.mac_address }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-slate-400 font-mono text-xs">{{ device.compute_module | default('Unknown') }}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-slate-400 font-mono text-xs">{{ device.last_seen | default('Unknown') }}</td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <span class="px-2 py-1 text-[10px] font-bold rounded-sm bg-amber-950/60 text-amber-500 border border-amber-800/50 uppercase tracking-widest animate-pulse">Unclaimed</span>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-right">
-                                <button onclick="openClaimModal('{{ device.mac_address }}')" class="px-4 py-2 text-xs font-bold tracking-widest uppercase rounded bg-sky-600/20 text-sky-400 border border-sky-500/50 hover:bg-sky-500 hover:text-white hover:shadow-[0_0_15px_rgba(14,165,233,0.4)] transition-all">
+                                <button onclick="openClaimModal('{{ device.mac_address }}', '{{ device.compute_module | default('') }}')" class="px-4 py-2 text-xs font-bold tracking-widest uppercase rounded bg-sky-600/20 text-sky-400 border border-sky-500/50 hover:bg-sky-500 hover:text-white hover:shadow-[0_0_15px_rgba(14,165,233,0.4)] transition-all">
                                     Claim Node
                                 </button>
                             </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="4" class="px-6 py-12 text-center text-slate-500 font-mono text-sm tracking-widest">NO UNCLAIMED NODES DETECTED</td>
+                            <td colspan="5" class="px-6 py-12 text-center text-slate-500 font-mono text-sm tracking-widest">NO UNCLAIMED NODES DETECTED</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -1105,7 +1107,8 @@
 
                 <div>
                     <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">ESP32 Hardware Type</label>
-                    <input type="text" name="hardware_type" list="claim-hardware-type-options" required
+                    <p class="text-[10px] text-sky-400 font-mono mb-1">Device reports compute module: <span id="claim-compute-module-hint">—</span></p>
+                    <input type="text" id="claim-hardware-type" name="hardware_type" list="claim-hardware-type-options" required
                            placeholder="e.g. S3, C3, C6..."
                            class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-sky-500 outline-none placeholder-slate-500">
                     <datalist id="claim-hardware-type-options">
@@ -1332,7 +1335,7 @@
                         {% for cm in compute_modules %}
                         <option value="{{ cm.id }}">{{ cm.name }}</option>
                         {% else %}
-                        <option value="" disabled selected>No compute modules — add one in Hardware</option>
+                        <option value="" disabled selected>No compute modules yet — upload one via the CLI/M2M uploader first to register it</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -1855,8 +1858,12 @@
             });
         }
 
-        function openClaimModal(mac) {
+        function openClaimModal(mac, computeModule) {
             if (claimMacInput) claimMacInput.value = mac;
+            const computeModuleHint = document.getElementById('claim-compute-module-hint');
+            if (computeModuleHint) computeModuleHint.textContent = computeModule || 'Unknown';
+            const hardwareTypeInput = document.getElementById('claim-hardware-type');
+            if (hardwareTypeInput) hardwareTypeInput.value = '';
             if (claimModal) {
                 claimModal.classList.remove('hidden');
                 claimModal.classList.add('flex');

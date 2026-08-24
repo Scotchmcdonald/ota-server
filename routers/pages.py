@@ -127,6 +127,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         {
             "mac_address": d.mac_address,
             "last_seen": d.last_checkin.isoformat() if d.last_checkin else "Unknown",
+            "compute_module": d.compute_module or "Unknown",
         }
         for d in unclaimed_devices
     ]
