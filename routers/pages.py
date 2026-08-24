@@ -130,6 +130,51 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             "heartbeat_interval": device.heartbeat_interval,
         })
 
+    # Fleet Audit: group claimed devices by (tag names, compute_module) per fleet
+    fleet_audit: dict = {}
+    fleet_by_id = {f.id: f for f in fleets}
+    for device in visible_claimed_devices:
+        if not device.fleet_id:
+            continue
+        all_tags = device.tags or []
+        tag_names = sorted([t.name for t in all_tags])
+        key = (tuple(tag_names), device.compute_module or "")
+        fid = device.fleet_id
+        if fid not in fleet_audit:
+            fleet_audit[fid] = {"fleet_name": (device.fleet.name if device.fleet else "Unknown"), "groups": {}}
+        group = fleet_audit[fid]["groups"].setdefault(key, {
+            "tag_names": tag_names,
+            "compute_module": device.compute_module or "",
+            "device_count": 0,
+            "firmware_versions": set(),
+            "sample_macs": [],
+        })
+        group["device_count"] += 1
+        fw = device.current_firmware_version
+        if fw:
+            group["firmware_versions"].add(fw)
+        else:
+            group["firmware_versions"].add("unknown")
+        group["sample_macs"].append(device.mac_address)
+
+    fleet_audit_output: dict = {}
+    for fid, data in fleet_audit.items():
+        groups_list = []
+        for key, grp in data["groups"].items():
+            versions_list = sorted(grp["firmware_versions"])
+            versions_display = ", ".join(versions_list)
+            groups_list.append({
+                "tag_names": grp["tag_names"],
+                "compute_module": grp["compute_module"] or "Unknown",
+                "device_count": grp["device_count"],
+                "firmware_versions": versions_display,
+                "firmware_versions_list": versions_list,
+                "is_mixed": len(versions_list) > 1,
+                "sample_macs": grp["sample_macs"],
+            })
+        if groups_list:
+            fleet_audit_output[fid] = {"fleet_name": data["fleet_name"], "groups": groups_list}
+
     unclaimed_rows = [
         {
             "mac_address": d.mac_address,
@@ -193,6 +238,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             "firmware_versions_by_name": firmware_versions_by_name,
             "scope_options":        scope_options,
             "fleet_nodes":          fleet_nodes,
+            "fleet_audit":          fleet_audit_output,
             "unclaimed_devices":    unclaimed_rows,
             "allowed_emails":       allowed_emails,
             "allowed_domains":      allowed_domains,
