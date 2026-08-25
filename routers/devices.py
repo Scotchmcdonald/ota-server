@@ -95,7 +95,7 @@ def claim_device_from_form(
 
     # Claim only sets the device's immutable hardware type. Every other tag
     # is assigned later via Manage Device / Fleet tooling, not at enrollment.
-    _upsert_tags_for_device(device, [hardware_type], db, actor_is_admin=current_user.role == UserRole.Admin)
+    _upsert_tags_for_device(device, hardware_type, db, actor_is_admin=current_user.role == UserRole.Admin)
     for t in device.tags or []:
         if t.name == hardware_type:
             t.category = "hardware"
