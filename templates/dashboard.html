@@ -24,6 +24,10 @@
         ::-webkit-scrollbar-track { background: #0f172a; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+        /* Warehouse tree disclosure triangles - default marker replaced by our own chevron */
+        .warehouse-tree summary { list-style: none; cursor: pointer; }
+        .warehouse-tree summary::-webkit-details-marker { display: none; }
     </style>
 </head>
 <body class="antialiased min-h-screen font-sans flex flex-col selection:bg-sky-500/30">
@@ -68,8 +72,8 @@
                 </div>
 
                 <div class="subnav-group flex-wrap gap-2" data-top="firmware">
-                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="firmware" data-sub="warehouse">Warehouse</button>
                     <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="firmware" data-sub="queue">Release Queue</button>
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="firmware" data-sub="warehouse">Warehouse</button>
                     <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="firmware" data-sub="oneshots">One-Shots</button>
                 </div>
 
@@ -163,60 +167,88 @@
                 {% endif %}
             </div>
 
-            <div class="glass-panel overflow-hidden rounded-xl shadow-2xl border-t border-t-emerald-500/30">
+            <div class="glass-panel overflow-hidden rounded-xl shadow-2xl border-t border-t-emerald-500/30 warehouse-tree">
                 <div class="px-6 py-4 border-b border-slate-800 bg-slate-900/50">
                     <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest">Release Catalog</h3>
-                    <p class="text-[10px] text-slate-500 font-mono mt-1">Approved releases by firmware target and compute module</p>
+                    <p class="text-[10px] text-slate-500 font-mono mt-1">Approved releases grouped by name, tags, and compute module — click to expand</p>
                 </div>
-                <table class="min-w-full divide-y divide-slate-800">
-                    <thead class="bg-slate-900/30">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Firmware Name</th>
-                            <th class="px-6 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Version</th>
-                            <th class="px-6 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Compute Module</th>
-                            <th class="px-6 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Tags</th>
-                            <th class="px-6 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Uploaded</th>
-                            <th class="px-6 py-3 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-800/50 text-xs bg-slate-900/20">
-                        {% for rel in versioned_releases %}
-                        <tr class="hover:bg-slate-800/40 transition-colors">
-                            <td class="px-6 py-3 whitespace-nowrap text-emerald-300 font-mono">{{ rel.firmware_name }}</td>
-                            <td class="px-6 py-3 whitespace-nowrap text-slate-200 font-mono">{{ rel.firmware_version }}</td>
-                            <td class="px-6 py-3 whitespace-nowrap text-slate-300 font-mono">{{ rel.compute_module }}</td>
-                            <td class="px-6 py-3 whitespace-nowrap">
-                                <div class="flex gap-1.5 flex-wrap">
-                                    {% for tag in (rel.tags or []) %}
-                                    <span class="px-1.5 py-0.5 text-[8px] font-bold rounded bg-slate-800 text-slate-300 border border-slate-700 uppercase" style="border-left: 2px solid {{ tag.color or '#3b82f6' }};" title="{{ tag.category or 'custom' }}: {{ tag.name }}">{{ tag.name }}</span>
-                                    {% else %}
-                                    <span class="text-slate-600 text-[9px]">None</span>
+                <div class="divide-y divide-slate-800/50">
+                    {% for name_group in warehouse_tree %}
+                    <details class="group/name">
+                        <summary class="flex items-center gap-2 px-6 py-3 hover:bg-slate-800/40 transition-colors">
+                            <svg class="w-3.5 h-3.5 text-emerald-400 transition-transform group-open/name:rotate-90 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                            <span class="text-sm font-mono text-emerald-300">{{ name_group.firmware_name }}</span>
+                            <span class="text-[10px] text-slate-500 font-mono">{{ name_group.count }} release(s)</span>
+                        </summary>
+                        <div class="pl-6 border-l border-slate-800 ml-6">
+                            {% for tag_group in name_group.tag_groups %}
+                            <details class="group/tags border-t border-slate-800/50">
+                                <summary class="flex items-center gap-2 px-6 py-2.5 hover:bg-slate-800/30 transition-colors">
+                                    <svg class="w-3 h-3 text-sky-400 transition-transform group-open/tags:rotate-90 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                    <div class="flex gap-1.5 flex-wrap items-center">
+                                        {% for tag in tag_group.tags %}
+                                        <span class="px-1.5 py-0.5 text-[8px] font-bold rounded bg-slate-800 text-slate-300 border border-slate-700 uppercase" style="border-left: 2px solid {{ tag.color or '#3b82f6' }};" title="{{ tag.category or 'custom' }}: {{ tag.name }}">{{ tag.name }}</span>
+                                        {% else %}
+                                        <span class="text-slate-500 text-[10px] font-mono">No Tags</span>
+                                        {% endfor %}
+                                    </div>
+                                    <span class="text-[10px] text-slate-500 font-mono">{{ tag_group.count }} release(s)</span>
+                                </summary>
+                                <div class="pl-6 border-l border-slate-800 ml-6">
+                                    {% for compute_group in tag_group.computes %}
+                                    <details class="group/compute border-t border-slate-800/50">
+                                        <summary class="flex items-center gap-2 px-6 py-2 hover:bg-slate-800/20 transition-colors">
+                                            <svg class="w-3 h-3 text-slate-400 transition-transform group-open/compute:rotate-90 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                            <span class="text-xs font-mono text-slate-300">{{ compute_group.compute_module }}</span>
+                                            <span class="text-[10px] text-slate-500 font-mono">{{ compute_group.count }} version(s)</span>
+                                        </summary>
+                                        <table class="min-w-full divide-y divide-slate-800/50">
+                                            <thead class="bg-slate-900/30">
+                                                <tr>
+                                                    <th class="pl-12 pr-6 py-2 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Version</th>
+                                                    <th class="px-6 py-2 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Uploaded</th>
+                                                    <th class="px-6 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-slate-800/30 text-xs bg-slate-900/10">
+                                                {% for rel in compute_group.versions %}
+                                                <tr class="hover:bg-slate-800/30 transition-colors">
+                                                    <td class="pl-12 pr-6 py-2 whitespace-nowrap text-slate-200 font-mono">
+                                                        {{ rel.firmware_version }}
+                                                        {% if rel.is_latest %}
+                                                        <span class="ml-1.5 px-1.5 py-0.5 text-[8px] font-bold rounded bg-emerald-900/50 text-emerald-300 border border-emerald-700/50 uppercase align-middle">Latest</span>
+                                                        {% endif %}
+                                                    </td>
+                                                    <td class="px-6 py-2 whitespace-nowrap text-slate-500 font-mono">{{ rel.upload_timestamp }}</td>
+                                                    <td class="px-6 py-2 whitespace-nowrap text-right">
+                                                        <button
+                                                            type="button"
+                                                            onclick='openFirmwareTagModal({{ rel.id|tojson }}, {{ rel.firmware_name|tojson }}, {{ (rel.tags|default([]))|tojson }})'
+                                                            class="px-2 py-1 text-[9px] font-bold tracking-widest uppercase rounded bg-amber-900/40 text-amber-300 border border-amber-700/50 hover:bg-amber-600 hover:text-white transition-all"
+                                                        >
+                                                            Manage Tags
+                                                        </button>
+                                                        {% if rel.is_stale %}
+                                                        <form action="/api/releases/{{ rel.id }}/purge" method="POST" class="inline admin-guard-form ml-1" data-confirm="Purge {{ rel.firmware_name }} {{ rel.firmware_version }}? It will be marked Rejected but never served." data-success-redirect="/dashboard?top=firmware&sub=warehouse">
+                                                            <button type="submit" class="px-2 py-1 text-[9px] font-bold tracking-widest uppercase rounded bg-rose-900/40 text-rose-300 border border-rose-700/50 hover:bg-rose-600 hover:text-white transition-all">Purge</button>
+                                                        </form>
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </details>
                                     {% endfor %}
                                 </div>
-                            </td>
-                            <td class="px-6 py-3 whitespace-nowrap text-slate-500 font-mono">{{ rel.upload_timestamp }}</td>
-                            <td class="px-6 py-3 whitespace-nowrap text-right">
-                                <button
-                                    type="button"
-                                    onclick='openFirmwareTagModal({{ rel.id|tojson }}, {{ rel.firmware_name|tojson }}, {{ (rel.tags|default([]))|tojson }})'
-                                    class="px-2 py-1 text-[9px] font-bold tracking-widest uppercase rounded bg-amber-900/40 text-amber-300 border border-amber-700/50 hover:bg-amber-600 hover:text-white transition-all"
-                                >
-                                    Manage Tags
-                                </button>
-                                {% if rel.is_stale %}
-                                <form action="/api/releases/{{ rel.id }}/purge" method="POST" class="inline admin-guard-form ml-1" data-confirm="Purge {{ rel.firmware_name }} {{ rel.firmware_version }}? It will be marked Rejected but never served." data-success-redirect="/dashboard?top=firmware&sub=warehouse">
-                                    <button type="submit" class="px-2 py-1 text-[9px] font-bold tracking-widest uppercase rounded bg-rose-900/40 text-rose-300 border border-rose-700/50 hover:bg-rose-600 hover:text-white transition-all">Purge</button>
-                                </form>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="7" class="px-6 py-8 text-center text-slate-500 font-mono">No releases uploaded yet.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                            </details>
+                            {% endfor %}
+                        </div>
+                    </details>
+                    {% else %}
+                    <p class="px-6 py-8 text-center text-slate-500 font-mono text-xs">No releases uploaded yet.</p>
+                    {% endfor %}
+                </div>
             </div>
         </section>
 

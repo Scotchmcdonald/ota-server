@@ -1,3 +1,4 @@
+from collections import defaultdict
 from datetime import datetime
 from typing import Optional
 
@@ -87,6 +88,62 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             "tags": [{"name": t.name, "category": t.category, "color": t.color} for t in (release.tags or [])],
             "upload_timestamp": release.upload_timestamp,
             "is_stale": is_stale,
+        })
+
+    # Warehouse tree: Name -> Tag combination -> Compute Module -> Versions
+    # (newest first). Built from approved_release_rows so tags are already
+    # plain dicts (name/category/color) and is_stale is already computed -
+    # nothing here re-derives either.
+    def _sort_versions_newest_first(rows):
+        valid = []
+        invalid = []
+        for row in rows:
+            try:
+                valid.append((parse_version(row["firmware_version"]), row))
+            except Exception:
+                invalid.append(row)
+        valid.sort(key=lambda pair: pair[0], reverse=True)
+        return [row for _, row in valid] + sorted(invalid, key=lambda row: (row["firmware_version"] or ""))
+
+    by_name: dict = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    for row in approved_release_rows:
+        tag_key = tuple(sorted((t["category"], t["name"]) for t in row["tags"]))
+        by_name[row["firmware_name"]][tag_key][row["compute_module"]].append(row)
+
+    warehouse_tree = []
+    for firmware_name in sorted(by_name.keys(), key=str.lower):
+        tag_groups_dict = by_name[firmware_name]
+        tag_groups = []
+        name_count = 0
+        for tag_key in sorted(tag_groups_dict.keys(), key=lambda k: ", ".join(n for _, n in k).lower()):
+            compute_dict = tag_groups_dict[tag_key]
+            tag_label = ", ".join(n for _, n in tag_key) if tag_key else "No Tags"
+            computes = []
+            group_count = 0
+            group_tags = None
+            for compute_module in sorted(compute_dict.keys(), key=str.lower):
+                rows_sorted = _sort_versions_newest_first(compute_dict[compute_module])
+                if group_tags is None and rows_sorted:
+                    group_tags = rows_sorted[0]["tags"]
+                for i, row in enumerate(rows_sorted):
+                    row["is_latest"] = (i == 0)
+                computes.append({
+                    "compute_module": compute_module,
+                    "versions": rows_sorted,
+                    "count": len(rows_sorted),
+                })
+                group_count += len(rows_sorted)
+            tag_groups.append({
+                "label": tag_label,
+                "tags": group_tags or [],
+                "computes": computes,
+                "count": group_count,
+            })
+            name_count += group_count
+        warehouse_tree.append({
+            "firmware_name": firmware_name,
+            "tag_groups": tag_groups,
+            "count": name_count,
         })
 
     teams = db.query(Team).all()
@@ -225,6 +282,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             "db_user":              user_info,
             "devices":              visible_claimed_devices,
             "versioned_releases":   approved_release_rows,
+            "warehouse_tree":       warehouse_tree,
             "staging_versioned_release_rows": staging_release_rows,
             "api_tokens":           api_tokens,
             "new_key":              new_key,
