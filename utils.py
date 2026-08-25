@@ -15,26 +15,18 @@ TAG_CATEGORIES = {
     "role": "Group routing and role tags",
 }
 
+# The full real Espressif ESP32 chip-family lineup - not board/prototyping-
+# surface descriptors (those aren't "ESP32 Hardware Type" and vary per
+# project; admins tag those separately if/when they need to).
 DEFAULT_HARDWARE_TAGS = [
-    ("h1", "ESP32-S3", "#0ea5e9"),
-    ("h2", "ESP32-C3", "#06b6d4"),
-    ("h3", "ESP32-S2", "#0891b2"),
-    ("h4", "ESP32-C6", "#22d3ee"),
-    ("h5", "ESP32-P4", "#67e8f9"),
-    ("d1", "FeatherS3", "#a3e635"),
-    ("d2", "FeatherS3-Dev", "#84cc16"),
-    ("d3", "ESP32-DevKitC", "#22c55e"),
-    ("d4", "ESP32-C3-DevKit", "#16a34a"),
-    ("p1", "Breadboard", "#475569"),
-    ("p2", "Custom-PCB", "#64748b"),
-    ("p3", "Sensor-Board", "#65a30d"),
-]
-
-DEFAULT_BUILD_TAGS = [
-    ("fb1", "production", "#10b981"),
-    ("fb2", "debug", "#f59e0b"),
-    ("fb3", "canary", "#ef4444"),
-    ("fb4", "test-stub", "#8b5cf6"),
+    ("h1", "ESP32", "#0ea5e9"),
+    ("h2", "ESP32-S2", "#0891b2"),
+    ("h3", "ESP32-S3", "#06b6d4"),
+    ("h4", "ESP32-C2", "#22d3ee"),
+    ("h5", "ESP32-C3", "#67e8f9"),
+    ("h6", "ESP32-C6", "#38bdf8"),
+    ("h7", "ESP32-H2", "#0284c7"),
+    ("h8", "ESP32-P4", "#0369a1"),
 ]
 
 

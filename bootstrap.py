@@ -1,4 +1,4 @@
-from utils import TAG_CATEGORIES, DEFAULT_HARDWARE_TAGS, DEFAULT_BUILD_TAGS
+from utils import TAG_CATEGORIES, DEFAULT_HARDWARE_TAGS
 from config import ADMIN_EMAILS
 from database import SessionLocal
 from models import Tag, User, UserRole, AllowedEmail
@@ -22,13 +22,9 @@ def _seed_tag_categories() -> None:
             if not existing:
                 db.add(Tag(name=name, category="hardware", color=color))
 
-        for key, name, color in DEFAULT_BUILD_TAGS:
-            existing = db.query(Tag).filter(
-                Tag.category == "firmware_build",
-                Tag.name == name,
-            ).first()
-            if not existing:
-                db.add(Tag(name=name, category="firmware_build", color=color))
+        # firmware_build tags (production/debug/canary/etc) are NOT seeded -
+        # unlike hardware chip families, there's no fixed real-world set for
+        # these, so they accumulate purely from actual usage.
 
         db.commit()
     finally:
