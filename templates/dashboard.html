@@ -1334,23 +1334,25 @@
 
                 <div>
                     <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Tags</label>
-                    <div class="space-y-2">
-                        {% for cat in tag_categories|default(["hardware", "firmware_compat", "firmware_feature", "firmware_build", "role", "custom"]) %}
-                        <div class="flex items-center gap-2">
-                            <label class="text-[9px] font-bold text-slate-500 uppercase min-w-[95px]">{{ cat }}</label>
-                            <div class="tag-category-tags" data-category="{{ cat }}">
-                                <!-- Populated by JS -->
+                    <p class="text-[10px] text-slate-500 mb-2">Hardware type is immutable, set at claim. Suggestions below are pulled from other devices in the selected fleet.</p>
+                    <div class="space-y-3">
+                        {% for cat in tag_categories|default(["hardware", "firmware_compat", "firmware_feature", "firmware_build", "role", "custom"]) if cat != "hardware" %}
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <label class="text-[9px] font-bold text-slate-500 uppercase min-w-[95px]">{{ cat }}</label>
+                                <div class="tag-category-tags" data-category="{{ cat }}">
+                                    <!-- Populated by JS -->
+                                </div>
+                                <div style="display: flex; gap: 4px;">
+                                    <input type="text" class="flex-1 min-w-0 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 placeholder-slate-500 focus:ring-1 focus:ring-amber-500 outline-none tag-category-input" data-category="{{ cat }}" data-selected-tags="[]" placeholder="Add tag...">
+                                    <button type="button" class="tag-add-btn px-1.5 py-1 text-[9px] bg-amber-600 text-white rounded hover:bg-amber-500 transition-colors" data-category="{{ cat }}">+</button>
+                                    <button type="button" class="tag-create-btn px-1.5 py-1 text-[9px] text-amber-300 hover:text-amber-200 transition-colors" data-category="{{ cat }}">[New]</button>
+                                </div>
                             </div>
-                            <div style="display: flex; gap: 4px;">
-                                <input type="text" class="flex-1 min-w-0 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 placeholder-slate-500 focus:ring-1 focus:ring-amber-500 outline-none tag-category-input" data-category="{{ cat }}" data-selected-tags="[]" placeholder="Add tag...">
-                                <button type="button" class="tag-add-btn px-1.5 py-1 text-[9px] bg-amber-600 text-white rounded hover:bg-amber-500 transition-colors" data-category="{{ cat }}">+</button>
-                                <button type="button" class="tag-create-btn px-1.5 py-1 text-[9px] text-amber-300 hover:text-amber-200 transition-colors" data-category="{{ cat }}">[New]</button>
-                            </div>
+                            <div class="tag-suggestions flex gap-1.5 flex-wrap mt-1 ml-[103px] empty:hidden" data-category="{{ cat }}"></div>
                         </div>
                         {% endfor %}
                     </div>
-                    <input type="text" id="manage-device-tags-text" placeholder="Or type comma-separated tags: firmware-v1, production, hardware-s3" class="w-full mt-2 bg-slate-800 border border-slate-700 rounded py-2 px-3 text-xs text-slate-200 placeholder-slate-500 focus:ring-1 focus:ring-amber-500 outline-none">
-                    <p class="text-[10px] text-slate-500 mt-1">Comma-separated tags will be matched to existing tags by name.</p>
                 </div>
 
                 <div>
@@ -1374,13 +1376,15 @@
                         <datalist id="available-firmware-versions">
                         </datalist>
                         <div>
-                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">One-Shot Release ID</label>
-                            <input type="number" id="manage-device-target-oneshot" name="target_oneshot_release_id" placeholder="Release ID or leave empty" min="0" class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none placeholder-slate-500">
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">One-Shot Release</label>
+                            <select id="manage-device-target-oneshot" name="target_oneshot_release_id" class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none">
+                                <option value="">None</option>
+                                {% for os_rel in one_shot_releases %}
+                                <option value="{{ os_rel.id }}">#{{ os_rel.id }} — {{ os_rel.filename }} ({{ os_rel.compute_module }})</option>
+                                {% endfor %}
+                            </select>
                         </div>
-                        <div>
-                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Heartbeat Interval (seconds, reported by device)</label>
-                            <input type="number" id="manage-device-heartbeat" disabled placeholder="Not yet reported" class="w-full bg-slate-900 border border-slate-800 rounded py-2 px-3 text-sm text-slate-500 outline-none placeholder-slate-600 cursor-not-allowed">
-                        </div>
+                        <p class="text-[10px] text-slate-500 font-mono">Heartbeat: <span id="manage-device-heartbeat-display">not yet reported</span> (reported by device, not editable)</p>
                     </div>
                 </div>
 
@@ -1912,6 +1916,47 @@
         initAdminGuardForms();
 
         const firmwareVersionsByName = {{ firmware_versions_by_name | tojson }};
+        const fleetTagSuggestions = {{ fleet_tag_suggestions | tojson }};
+
+        function refreshFleetTagSuggestions() {
+            const fleetSelect = document.getElementById('manage-device-fleet');
+            const fleetId = fleetSelect ? fleetSelect.value : '';
+            const byCategory = fleetTagSuggestions[fleetId] || {};
+
+            document.querySelectorAll('#manage-device-modal .tag-suggestions').forEach(container => {
+                const cat = container.dataset.category;
+                const input = document.querySelector(`#manage-device-modal .tag-category-input[data-category="${cat}"]`);
+                const selected = input ? JSON.parse(input.dataset.selectedTags || '[]') : [];
+                const selectedNames = new Set(selected.map(t => t.name));
+                const suggestions = (byCategory[cat] || []).filter(t => !selectedNames.has(t.name));
+
+                container.innerHTML = '';
+                suggestions.forEach(tag => {
+                    const chip = document.createElement('button');
+                    chip.type = 'button';
+                    chip.className = 'px-1.5 py-0.5 text-[8px] font-bold rounded bg-slate-800/60 text-slate-400 border border-dashed border-slate-600 hover:border-amber-500 hover:text-amber-300 transition-colors';
+                    chip.style.borderLeftWidth = '2px';
+                    chip.style.borderLeftColor = tag.color || '#3b82f6';
+                    chip.textContent = `+ ${tag.name}`;
+                    chip.addEventListener('click', () => {
+                        if (!input) return;
+                        const current = JSON.parse(input.dataset.selectedTags || '[]');
+                        if (!current.some(t => t.name.toLowerCase() === tag.name.toLowerCase())) {
+                            current.push({ name: tag.name, color: tag.color || '#3b82f6' });
+                            input.dataset.selectedTags = JSON.stringify(current);
+                            renderCategoryTags(input);
+                            refreshFleetTagSuggestions();
+                        }
+                    });
+                    container.appendChild(chip);
+                });
+            });
+        }
+
+        const manageDeviceFleetSelect = document.getElementById('manage-device-fleet');
+        if (manageDeviceFleetSelect) {
+            manageDeviceFleetSelect.addEventListener('change', refreshFleetTagSuggestions);
+        }
 
         // Refresh the device manage modal datalist when the firmware name changes
         const manageDeviceNameInput = document.getElementById('manage-device-target-firmware-name');
@@ -2184,10 +2229,12 @@
             if (targetFirmwareVersionInput) targetFirmwareVersionInput.value = targetFirmwareVersion || '';
             
             const targetOneshotInput = document.getElementById('manage-device-target-oneshot');
-            if (targetOneshotInput) targetOneshotInput.value = targetOneshotReleaseId || '';
-            
-            const heartbeatInput = document.getElementById('manage-device-heartbeat');
-            if (heartbeatInput) heartbeatInput.value = heartbeatInterval || '';
+            if (targetOneshotInput) targetOneshotInput.value = targetOneshotReleaseId != null ? String(targetOneshotReleaseId) : '';
+
+            const heartbeatDisplay = document.getElementById('manage-device-heartbeat-display');
+            if (heartbeatDisplay) heartbeatDisplay.textContent = heartbeatInterval ? `${heartbeatInterval}s` : 'not yet reported';
+
+            refreshFleetTagSuggestions();
 
             if (manageDeviceForm) {
                 const encodedMac = encodeURIComponent(mac || '');
@@ -2232,6 +2279,8 @@
                     renderCategoryTags(input);
                 });
             });
+
+            if (typeof refreshFleetTagSuggestions === 'function') refreshFleetTagSuggestions();
         }
 
         function closeManageDeviceModal() {
@@ -2249,42 +2298,40 @@
 
         // -- Tag Category Handlers ------------------------------
         document.addEventListener('click', (e) => {
-            const handleTagAdd = (btnCls, isClaim) => {
+            const handleTagAdd = (btnCls, modalSelector) => {
                 if (!e.target.classList.contains(btnCls)) return;
-                
+
                 const category = e.target.dataset.category;
-                const prefix = isClaim ? '#claim-modal' : '#manage-device-modal';
-                const input = document.querySelector(`${prefix} .tag-category-input[data-category="${category}"]`);
+                const input = document.querySelector(`${modalSelector} .tag-category-input[data-category="${category}"]`);
                 if (!input) return;
-                
+
                 const value = input.value.trim();
                 if (!value) return;
-                
+
                 const selected = JSON.parse(input.dataset.selectedTags || '[]');
-                
+
                 if (selected.some(t => t.name.toLowerCase() === value.toLowerCase())) {
                     return;
                 }
-                
-                selected.push({ name: value, color: isClaim ? '#3b82f6' : '#3b82f6' });
+
+                selected.push({ name: value, color: '#3b82f6' });
                 input.dataset.selectedTags = JSON.stringify(selected);
                 renderCategoryTags(input);
                 input.value = '';
             };
-            
-            const handleTagCreate = (btnCls, isClaim) => {
+
+            const handleTagCreate = (btnCls, modalSelector) => {
                 if (!e.target.classList.contains(btnCls)) return;
-                
+
                 const category = e.target.dataset.category;
-                const prefix = isClaim ? '#claim-modal' : '#manage-device-modal';
-                const input = document.querySelector(`${prefix} .tag-category-input[data-category="${category}"]`);
+                const input = document.querySelector(`${modalSelector} .tag-category-input[data-category="${category}"]`);
                 if (!input) return;
-                
+
                 const value = input.value.trim();
                 if (!value) return;
-                
+
                 const selected = JSON.parse(input.dataset.selectedTags || '[]');
-                
+
                 fetch('/api/tags', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -2302,11 +2349,11 @@
                     showToast('Failed to create tag.', 'error');
                 });
             };
-            
-            handleTagAdd('tag-add-btn', false);
-            handleTagCreate('tag-create-btn', false);
-            handleTagAdd('firmware-tag-add-btn', false);
-            handleTagCreate('firmware-tag-create-btn', false);
+
+            handleTagAdd('tag-add-btn', '#manage-device-modal');
+            handleTagCreate('tag-create-btn', '#manage-device-modal');
+            handleTagAdd('firmware-tag-add-btn', '#firmware-tag-modal');
+            handleTagCreate('firmware-tag-create-btn', '#firmware-tag-modal');
         });
 
         function openUploadModal() {

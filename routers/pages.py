@@ -187,6 +187,30 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             "heartbeat_interval": device.heartbeat_interval,
         })
 
+    # Tag suggestions for Manage Device: tags already used elsewhere in the
+    # same fleet, so an admin can click instead of retyping. Derived from
+    # fleet_nodes (already scoped to what this viewer can see) rather than a
+    # fresh query. Hardware is excluded - it's immutable, assigned only at
+    # claim, never editable here.
+    fleet_tag_suggestions: dict = defaultdict(lambda: defaultdict(dict))
+    for node in fleet_nodes:
+        fid = node["fleet_id"]
+        if not fid:
+            continue
+        for cat, cat_tags in node["tags_by_category"].items():
+            if cat == "hardware":
+                continue
+            for t in cat_tags:
+                fleet_tag_suggestions[fid][cat][t["name"]] = t["color"]
+
+    fleet_tag_suggestions_output = {
+        str(fid): {
+            cat: [{"name": name, "color": color} for name, color in names.items()]
+            for cat, names in cats.items()
+        }
+        for fid, cats in fleet_tag_suggestions.items()
+    }
+
     # Fleet Audit: group claimed devices by (tag names, compute_module) per fleet
     fleet_audit: dict = {}
     for device in visible_claimed_devices:
@@ -295,6 +319,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             "firmware_versions_by_name": firmware_versions_by_name,
             "scope_options":        scope_options,
             "fleet_nodes":          fleet_nodes,
+            "fleet_tag_suggestions": fleet_tag_suggestions_output,
             "fleet_audit":          fleet_audit_output,
             "unclaimed_devices":    unclaimed_rows,
             "allowed_emails":       allowed_emails,
