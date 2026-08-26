@@ -22,7 +22,10 @@
                             <span class="text-xs font-bold text-slate-300 uppercase tracking-wide">Unassigned</span>
                             <span class="board-column-count text-[10px] font-mono text-slate-500 bg-slate-900/60 rounded-full px-2 py-0.5">0</span>
                         </div>
-                        <div class="board-column-body flex-1 min-h-[120px] p-2 space-y-2 overflow-y-auto max-h-[60vh]" data-fleet-id=""></div>
+                        <div class="board-column-body-wrap relative flex-1 min-h-[120px]">
+                            <div class="board-column-body h-full p-2 flex flex-col gap-2 overflow-y-auto max-h-[60vh]" data-fleet-id=""></div>
+                            <div class="board-empty-hint hidden absolute inset-0 flex items-center justify-center text-[10px] text-slate-600 font-mono uppercase tracking-wide pointer-events-none">Drop here</div>
+                        </div>
                     </div>
                     {% for fleet in fleets %}
                     <div class="board-column shrink-0 w-72 bg-slate-800/40 border border-slate-700/60 rounded-xl flex flex-col">
@@ -30,7 +33,10 @@
                             <span class="text-xs font-bold text-sky-300 uppercase tracking-wide truncate" title="{{ fleet.name }}">{{ fleet.name }}</span>
                             <span class="board-column-count text-[10px] font-mono text-slate-500 bg-slate-900/60 rounded-full px-2 py-0.5">0</span>
                         </div>
-                        <div class="board-column-body flex-1 min-h-[120px] p-2 space-y-2 overflow-y-auto max-h-[60vh]" data-fleet-id="{{ fleet.id }}"></div>
+                        <div class="board-column-body-wrap relative flex-1 min-h-[120px]">
+                            <div class="board-column-body h-full p-2 flex flex-col gap-2 overflow-y-auto max-h-[60vh]" data-fleet-id="{{ fleet.id }}"></div>
+                            <div class="board-empty-hint hidden absolute inset-0 flex items-center justify-center text-[10px] text-slate-600 font-mono uppercase tracking-wide pointer-events-none">Drop here</div>
+                        </div>
                     </div>
                     {% else %}
                     {{ empty_state("No fleets configured yet. Create one from Settings to start organizing devices.") }}

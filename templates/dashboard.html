@@ -22,7 +22,12 @@
         /* Fleet Board (kanban) */
         .board-mode-btn { color: #94a3b8; }
         .board-mode-btn.board-mode-btn-active { color: #bae6fd; background: rgba(2, 132, 199, 0.3); border: 1px solid rgba(14, 165, 233, 0.6); }
-        .board-card-ghost { opacity: 0.4; }
+        .board-card { transition: box-shadow 0.15s ease, transform 0.15s ease; }
+        .board-card-ghost { opacity: 0.35; border: 1px dashed rgba(14, 165, 233, 0.6) !important; background: rgba(14, 165, 233, 0.08) !important; }
+        .board-card-chosen { box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.6), 0 8px 16px rgba(0, 0, 0, 0.35); }
+        .board-card-dragging { box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.8), 0 12px 24px rgba(0, 0, 0, 0.45); transform: rotate(1.5deg); cursor: grabbing !important; }
+        .board-column { transition: border-color 0.15s ease, background-color 0.15s ease; }
+        .board-column.board-column-dragover { border-color: rgba(14, 165, 233, 0.8); background: rgba(14, 165, 233, 0.06); }
         .board-column-header-dragover { background: rgba(14, 165, 233, 0.15); }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         
@@ -2690,6 +2695,37 @@
                 </div>`;
         }
 
+        // Shared tuning for every Board Sortable instance (fleets + tag
+        // columns). forceFallback swaps native HTML5 DnD - whose hit-testing
+        // is notoriously imprecise across browsers, which is what made drops
+        // require pixel-perfect alignment - for Sortable's own pointer-based
+        // drag, which it fully controls and can be tuned. swapThreshold/
+        // emptyInsertThreshold make near-target and empty-column drops
+        // register readily instead of demanding exact overlap. onMove adds
+        // a live highlight on whichever column the drag is currently over,
+        // so the destination is obvious before you release.
+        function boardClearColumnHighlights() {
+            document.querySelectorAll('.board-column.board-column-dragover').forEach((el) => el.classList.remove('board-column-dragover'));
+        }
+
+        function boardSortableOptions(extra) {
+            return Object.assign({
+                animation: 150,
+                forceFallback: true,
+                fallbackTolerance: 3,
+                swapThreshold: 0.65,
+                emptyInsertThreshold: 30,
+                ghostClass: 'board-card-ghost',
+                chosenClass: 'board-card-chosen',
+                dragClass: 'board-card-dragging',
+                onMove: (evt) => {
+                    boardClearColumnHighlights();
+                    evt.to?.closest('.board-column')?.classList.add('board-column-dragover');
+                    return true;
+                },
+            }, extra);
+        }
+
         // -- Fleets sub-mode: columns = Unassigned + each fleet --------
         function boardFleetColumnEl(fleetId) {
             const val = fleetId === null ? '' : String(fleetId);
@@ -2700,9 +2736,8 @@
             const col = boardFleetColumnEl(fleetId);
             if (!col) return;
             const members = BOARD_DEVICES.filter(n => (n.fleet_id ?? null) === fleetId);
-            col.innerHTML = members.length
-                ? members.map(boardCardHtml).join('')
-                : '<div class="text-[10px] text-slate-600 font-mono text-center py-6 pointer-events-none">Drop here</div>';
+            col.innerHTML = members.map(boardCardHtml).join('');
+            col.parentElement?.querySelector('.board-empty-hint')?.classList.toggle('hidden', members.length > 0);
             const countEl = col.closest('.board-column')?.querySelector('.board-column-count');
             if (countEl) countEl.textContent = members.length;
         }
@@ -2715,11 +2750,10 @@
                 const fleetId = col.dataset.fleetId ? parseInt(col.dataset.fleetId, 10) : null;
                 renderBoardFleetColumn(fleetId);
 
-                Sortable.create(col, {
+                Sortable.create(col, boardSortableOptions({
                     group: 'board-fleets',
-                    animation: 150,
-                    ghostClass: 'board-card-ghost',
                     onEnd: async (evt) => {
+                        boardClearColumnHighlights();
                         if (evt.from === evt.to) return;
                         const mac = evt.item.dataset.mac;
                         const fromFleetId = evt.from.dataset.fleetId ? parseInt(evt.from.dataset.fleetId, 10) : null;
@@ -2739,7 +2773,7 @@
                         renderBoardFleetColumn(toFleetId);
                         showToast('Device moved.', 'success');
                     },
-                });
+                }));
             });
 
             // Drag the Unassigned column header onto a fleet column -> bulk-move
@@ -2807,7 +2841,10 @@
                             ${isReal ? `<button type="button" onclick="deleteBoardTagColumn(${key})" title="Delete this tag entirely - affects every device and firmware release using it, fleet-wide" class="text-slate-600 hover:text-rose-400 text-xs leading-none">&times;</button>` : ''}
                         </div>
                     </div>
-                    <div class="board-column-body flex-1 min-h-[120px] p-2 space-y-2 overflow-y-auto max-h-[60vh]" data-tag-col="${key}"></div>
+                    <div class="board-column-body-wrap relative flex-1 min-h-[120px]">
+                        <div class="board-column-body h-full p-2 flex flex-col gap-2 overflow-y-auto max-h-[60vh]" data-tag-col="${key}"></div>
+                        <div class="board-empty-hint hidden absolute inset-0 flex items-center justify-center text-[10px] text-slate-600 font-mono uppercase tracking-wide pointer-events-none">Drop here</div>
+                    </div>
                 </div>`;
         }
 
@@ -2855,17 +2892,15 @@
                     const tagDef = columns.find(t => String(t.id) === key);
                     return tagDef ? inCat.includes(tagDef.name) : false;
                 });
-                col.innerHTML = colMembers.length
-                    ? colMembers.map(boardCardHtml).join('')
-                    : '<div class="text-[10px] text-slate-600 font-mono text-center py-6 pointer-events-none">Drop here</div>';
+                col.innerHTML = colMembers.map(boardCardHtml).join('');
+                col.parentElement?.querySelector('.board-empty-hint')?.classList.toggle('hidden', colMembers.length > 0);
                 const countEl = col.closest('.board-column')?.querySelector('.board-column-count');
                 if (countEl) countEl.textContent = colMembers.length;
 
-                Sortable.create(col, {
+                Sortable.create(col, boardSortableOptions({
                     group: `board-tags-${fleetId}-${category}`,
-                    animation: 150,
-                    ghostClass: 'board-card-ghost',
                     onEnd: async (evt) => {
+                        boardClearColumnHighlights();
                         if (evt.from === evt.to) return;
                         const mac = evt.item.dataset.mac;
                         const toKey = evt.to.dataset.tagCol;
@@ -2873,7 +2908,7 @@
                         renderBoardTags();
                         if (ok) showToast('Tag updated.', 'success');
                     },
-                });
+                }));
             });
         }
 
