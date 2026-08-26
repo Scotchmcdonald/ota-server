@@ -31,11 +31,18 @@ def check_update(
  
 
     # Step 1: Device lookup / auto-register
+    #
+    # The device generates its own secret on first boot (esp_fill_random,
+    # see fleet_nvs.c) and sends it on every call, claimed or not - the
+    # server has no channel to push a secret down to the device, so it must
+    # adopt whatever the device already generated as the canonical secret,
+    # never invent its own. Kept in sync on every unclaimed check-in too,
+    # in case the device is factory-reset/re-flashed before being claimed.
     device = db.query(Device).filter(Device.mac_address == x_device_mac).first()
     if not device:
         db.add(Device(
             mac_address=x_device_mac,
-            secret="pending_claim",
+            secret=x_device_secret,
             compute_module=x_compute_module,
             current_firmware_version=x_firmware_version,
             claimed=False,
@@ -45,6 +52,9 @@ def check_update(
         return Response(status_code=204)
 
     if not device.claimed:
+        if device.secret != x_device_secret:
+            device.secret = x_device_secret
+            db.commit()
         return Response(status_code=204)
 
     # Step 2: Authenticate

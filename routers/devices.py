@@ -43,10 +43,11 @@ def claim_device(
     device.claimed = True
     device.scope_type = payload.scope_type
     device.scope_id = payload.target_id
-    
-    # Generate a real strict secret on claim
-    device.secret = secrets.token_urlsafe(32)
-    
+    # device.secret is intentionally left untouched - see the same note in
+    # claim_device_from_form below. It's already the device's own
+    # self-generated secret, captured on its first check-in; there is no
+    # channel to push a server-generated one down to the device.
+
     db.commit()
     db.refresh(device)
     
@@ -91,7 +92,11 @@ def claim_device_from_form(
     device.scope_type = target_scope_type
     device.scope_id = target_scope_id
     device.fleet_id = parsed_fleet_id
-    device.secret = secrets.token_urlsafe(32)
+    # device.secret is intentionally left untouched here - it's already the
+    # device's own self-generated secret, captured on its first (unclaimed)
+    # check-in. Regenerating a server-side random one here would make it
+    # permanently unmatchable, since there's no channel to push a new
+    # secret down to the device.
 
     # Claim only sets the device's immutable hardware type. Every other tag
     # is assigned later via Manage Device / Fleet tooling, not at enrollment.
