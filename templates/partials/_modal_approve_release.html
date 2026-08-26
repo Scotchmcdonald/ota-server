@@ -1,0 +1,29 @@
+    <!-- Approve Release Modal -->
+    <div id="approve-release-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+        <div id="approve-release-modal-content" class="glass-panel p-6 rounded-xl shadow-[0_0_40px_rgba(0,0,0,0.8)] max-w-md w-full border border-emerald-500/30 transform scale-95 opacity-0 transition-all duration-200">
+            <div class="flex justify-between items-center mb-5">
+                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-widest flex items-center gap-2">
+                    <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    Approve Release
+                </h3>
+                <button onclick="closeApproveModal()" type="button" class="text-slate-500 border border-slate-700 rounded hover:text-white hover:bg-rose-500 hover:border-rose-500 transition-colors p-1" title="Close">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <form id="approve-release-form" action="/api/releases/0/approve" method="POST" class="space-y-5 admin-guard-form" data-success-redirect="/dashboard?top=firmware&sub=queue">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Staging Build</label>
+                    <input type="text" id="approve-release-label" readonly class="w-full bg-slate-900/80 border border-slate-700 rounded py-2 px-3 text-sm font-mono text-amber-300 outline-none cursor-not-allowed">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Version</label>
+                    <input type="text" name="version" id="approve-release-version" placeholder="Loading suggestion..." class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-emerald-500 outline-none">
+                    <p class="text-[10px] text-slate-500 mt-1">Pre-filled with the next patch bump for this target — edit for a different version.</p>
+                </div>
+                <div class="pt-2 flex gap-3">
+                    <button type="button" onclick="closeApproveModal()" class="flex-1 py-2.5 text-xs font-bold uppercase rounded border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors">Cancel</button>
+                    <button type="submit" class="flex-1 py-2.5 text-xs font-bold uppercase rounded bg-emerald-600 text-white hover:bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.35)] transition-all">Approve</button>
+                </div>
+            </form>
+        </div>
+    </div>

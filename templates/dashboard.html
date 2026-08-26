@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ESP Fleet</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
     <style>
         body { background-color: #0f172a; color: #f8fafc; }
         .glass-panel {
@@ -17,6 +18,12 @@
         .content-panel.active { display: block; animation: fadeIn 0.3s ease-out; }
         .subnav-group { display: none; }
         .subnav-group.active { display: flex; }
+
+        /* Fleet Board (kanban) */
+        .board-mode-btn { color: #94a3b8; }
+        .board-mode-btn.board-mode-btn-active { color: #bae6fd; background: rgba(2, 132, 199, 0.3); border: 1px solid rgba(14, 165, 233, 0.6); }
+        .board-card-ghost { opacity: 0.4; }
+        .board-column-header-dragover { background: rgba(14, 165, 233, 0.15); }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         
         /* Custom scrollbar */
@@ -64,64 +71,7 @@
     {% endmacro %}
 
     <!-- --------------------------- NAVBAR --------------------------- -->
-    <nav class="bg-slate-900/90 backdrop-blur border-b border-slate-800 p-4 sticky top-0 z-50 shadow-2xl">
-        <div class="max-w-7xl mx-auto space-y-4">
-            <div class="flex items-center justify-between gap-4">
-                <div class="flex items-center space-x-3">
-                <svg class="w-8 h-8 text-sky-500 shrink-0 drop-shadow-[0_0_8px_rgba(14,165,233,0.8)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"></path>
-                </svg>
-                <h1 class="text-2xl font-bold tracking-widest text-slate-100 header-glow uppercase">ESP FLEET</h1>
-                </div>
-
-                <div class="text-slate-400 font-mono text-sm tracking-wide hidden lg:block">
-                    SYS: <span id="clock" class="text-sky-300"></span>
-                </div>
-
-                <div class="flex items-center gap-3 bg-slate-800/80 border border-slate-700 rounded-lg px-3 py-1.5 shadow-inner">
-                    <div class="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)] animate-pulse"></div>
-                    <span class="text-slate-300 text-xs font-mono tracking-wide">{{ user.email if user else 'Operator' }}</span>
-                    {% if db_user and db_user.role.value == 'Admin' %}
-                        <span class="text-[9px] font-bold uppercase bg-rose-900/50 text-rose-400 px-1.5 py-0.5 rounded border border-rose-800/50">Admin</span>
-                    {% endif %}
-                    <a href="/logout" class="ml-2 text-[10px] font-bold tracking-wider uppercase text-slate-400 hover:text-rose-400 transition-colors">Log Out</a>
-                </div>
-            </div>
-
-                <div class="flex flex-wrap items-center gap-2 border border-slate-700/60 bg-slate-800/40 rounded-xl p-1" id="top-level-nav">
-                    <button class="top-tab-btn px-4 py-2 text-xs font-bold tracking-widest uppercase rounded-lg transition-all" data-top="devices">Devices</button>
-                    <button class="top-tab-btn px-4 py-2 text-xs font-bold tracking-widest uppercase rounded-lg transition-all" data-top="firmware">Firmware</button>
-                    <button class="top-tab-btn px-4 py-2 text-xs font-bold tracking-widest uppercase rounded-lg transition-all" data-top="settings">Settings</button>
-                </div>
-
-            <div class="border border-slate-700/60 bg-slate-800/30 rounded-xl px-3 py-2" id="sub-nav-container">
-                <div class="subnav-group flex-wrap gap-2" data-top="devices">
-                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="devices" data-sub="onboard" title="Claim unassigned devices that have phoned in">Onboard</button>
-                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="devices" data-sub="fleet" title="Manage claimed devices - assign to a fleet, edit tags, set direct OTA targeting">Manage</button>
-                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="devices" data-sub="deploy" title="Push firmware to a fleet with tag-gap review before committing">Deploy</button>
-                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="devices" data-sub="audit" title="Review each fleet's tag/hardware groups and catch partial firmware rollouts">Fleet Audit</button>
-                </div>
-
-                <div class="subnav-group flex-wrap gap-2" data-top="firmware">
-                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="firmware" data-sub="queue">Release Queue</button>
-                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="firmware" data-sub="warehouse">Warehouse</button>
-                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="firmware" data-sub="oneshots">One-Shots</button>
-                </div>
-
-                <div class="subnav-group flex-wrap gap-2" data-top="settings">
-                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="settings" data-sub="profile">My Profile</button>
-                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="settings" data-sub="tokens">My Tokens</button>
-                    {% if db_user and db_user.role.value == 'Admin' %}
-                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="settings" data-sub="teams">Teams</button>
-                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="settings" data-sub="tags">Tags</button>
-                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="settings" data-sub="fleets">Fleets</button>
-                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="settings" data-sub="access">Access</button>
-                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="settings" data-sub="root-tokens">Root Tokens</button>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </nav>
+    {% include 'partials/_nav.html' %}
 
     <!-- -------------------------- MAIN CONTENT ----------------------- -->
     <main class="flex-grow max-w-7xl mx-auto w-full p-4 sm:p-6 mt-2">
@@ -517,6 +467,9 @@
             </div>
 
         </section>
+
+        <!-- ---------------- DEVICES / BOARD ---------------- -->
+        {% include 'partials/_panel_devices_board.html' %}
 
         <!-- ---------------- DEVICES / DEPLOY ---------------- -->
         {% if db_user and db_user.role.value == 'Admin' %}
@@ -1089,55 +1042,7 @@
             </div>
         </section>
 
-        <!-- Fleet Edit Modal -->
-        <div id="fleet-edit-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
-            <div class="glass-panel p-6 rounded-xl shadow-[0_0_40px_rgba(0,0,0,0.8)] max-w-lg w-full border border-violet-500/30 transform scale-95 opacity-0 transition-all duration-200">
-                <div class="flex justify-between items-center mb-5">
-                    <h3 class="text-sm font-bold text-slate-200 uppercase tracking-widest flex items-center gap-2">
-                        <svg class="w-5 h-5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-                        Edit Fleet
-                    </h3>
-                    <button onclick="closeFleetEditModal()" type="button" class="text-slate-500 border border-slate-700 rounded hover:text-white hover:bg-rose-500 hover:border-rose-500 transition-colors p-1" title="Close">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                    </button>
-                </div>
-
-                <form id="fleet-edit-form" method="POST" class="space-y-5">
-                    <input type="hidden" id="fleet-edit-id" value="">
-                    <input type="hidden" id="fleet-edit-tags-json" value="">
-
-                    <div>
-                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Fleet Name</label>
-                        <input type="text" id="fleet-edit-name" name="name" required class="w-full bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-violet-500 focus:border-violet-500 text-slate-200">
-                    </div>
-                    <div>
-                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Description</label>
-                        <textarea id="fleet-edit-description" name="description" rows="2" class="w-full bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-violet-500 focus:border-violet-500 text-slate-200"></textarea>
-                    </div>
-                    <div>
-                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Tags</label>
-                        <div class="space-y-2">
-                            {% for cat in tag_categories|default(["hardware", "firmware_compat", "firmware_feature", "firmware_build", "role", "custom"]) %}
-                            <div class="flex items-center gap-2">
-                                <label class="text-[9px] font-bold text-slate-500 uppercase min-w-[95px]">{{ cat }}</label>
-                                <div class="fleet-edit-category-tags" data-category="{{ cat }}"></div>
-                                <div style="display: flex; gap: 4px;">
-                                    <input type="text" class="flex-1 min-w-0 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 placeholder-slate-500 focus:ring-1 focus:ring-violet-500 outline-none" data-category="{{ cat }}" data-selected-tags="[]" placeholder="Add tag...">
-                                    <button type="button" class="fleet-edit-tag-add-btn px-1.5 py-1 text-[9px] bg-violet-600 text-white rounded hover:bg-violet-500 transition-colors" data-category="{{ cat }}">+</button>
-                                    <button type="button" class="fleet-edit-tag-create-btn px-1.5 py-1 text-[9px] text-amber-300 hover:text-amber-200 transition-colors" data-category="{{ cat }}">[New]</button>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-
-                    <div class="pt-2 flex gap-3">
-                        <button type="button" onclick="closeFleetEditModal()" class="flex-1 py-2.5 text-xs font-bold uppercase rounded border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors">Cancel</button>
-                        <button type="submit" class="flex-1 py-2.5 text-xs font-bold uppercase rounded bg-violet-600 text-white hover:bg-violet-500 shadow-[0_0_15px_rgba(139,92,246,0.35)] transition-all">Save Fleet</button>
-                    </div>
-                </form>
-            </div>
-        </div>
+        {% include 'partials/_modal_fleet_edit.html' %}
         {% endif %}
 
         <!-- ---------------- ADMIN / ROOT TOKENS ---------------- -->
@@ -1196,438 +1101,25 @@
         </section>
         {% endif %}
 
-        <!-- Bulk Tag Edit Modal -->
-        <div id="bulk-tag-modal" class="fixed inset-0 z-[110] hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
-            <div class="glass-panel p-6 rounded-xl shadow-[0_0_40px_rgba(0,0,0,0.8)] max-w-lg w-full border border-violet-500/30 overflow-y-auto max-h-[90vh]">
-                <div class="flex justify-between items-center mb-5">
-                    <h3 class="text-sm font-bold text-slate-200 uppercase tracking-widest flex items-center gap-2">
-                        <svg class="w-5 h-5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
-                        Bulk Edit Tags
-                    </h3>
-                    <button onclick="closeBulkTagEdit()" type="button" class="text-slate-500 border border-slate-700 rounded hover:text-white hover:bg-rose-500 hover:border-rose-500 transition-colors p-1" title="Close">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                    </button>
-                </div>
-                
-                <div id="bulk-tag-selected-info" class="mb-4 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
-                    <p class="text-xs text-slate-300 font-mono"><span id="bulk-tag-count">0</span> devices selected</p>
-                    <input type="hidden" id="bulk-tag-mac-array">
-                </div>
-
-                <div class="mb-4">
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Action</label>
-                    <div class="flex gap-4">
-                        <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
-                            <input type="radio" name="bulk-tag-action" value="add" class="rounded bg-slate-800 border-slate-700 text-violet-500 focus:ring-violet-500" checked>
-                            Add Tag
-                        </label>
-                        <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
-                            <input type="radio" name="bulk-tag-action" value="remove" class="rounded bg-slate-800 border-slate-700 text-violet-500 focus:ring-violet-500">
-                            Remove Tag
-                        </label>
-                    </div>
-                </div>
-
-                <div class="mb-6">
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Category Filter</label>
-                    <select id="bulk-tag-category" class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-xs text-slate-200 focus:ring-1 focus:ring-violet-500 outline-none mb-3">
-                        <option value="">All Categories</option>
-                        {% for cat in tag_categories|default(["hardware", "firmware_compat", "firmware_feature", "firmware_build", "role", "custom"]) %}
-                        <option value="{{ cat }}">{{ cat|replace('_', ' ')|title }}</option>
-                        {% endfor %}
-                    </select>
-                    
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Select Tag to Edit</label>
-                    <select id="bulk-tag-select" class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-xs text-slate-200 focus:ring-1 focus:ring-violet-500 outline-none" size="6">
-                        <!-- Populated by JS -->
-                    </select>
-                </div>
-
-                <div class="mb-4">
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Or type comma-separated tags</label>
-                    <input type="text" id="bulk-tag-text-input" placeholder="tag1, tag2, tag3" class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-xs text-slate-200 placeholder-slate-500 focus:ring-1 focus:ring-violet-500 outline-none">
-                    <p class="text-[10px] text-slate-500 mt-1">Tags will be matched to existing tags by name. New tags are created automatically.</p>
-                </div>
-
-                <div id="bulk-tag-msg" class="text-xs font-mono hidden"></div>
-
-                <div class="flex justify-end gap-3 mt-6">
-                    <button onclick="closeBulkTagEdit()" class="px-4 py-2 text-xs font-bold tracking-wider uppercase rounded bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-white transition-all">Cancel</button>
-                    <button onclick="applyBulkTagEdit()" class="px-4 py-2 text-xs font-bold tracking-wider uppercase rounded bg-violet-600 text-white hover:bg-violet-500 transition-all">Apply to Selected</button>
-                </div>
-            </div>
-        </div>
+        {% include 'partials/_modal_bulk_tag.html' %}
 
     </main>
 
     <!-- -------------------------- MODALS / OVERLAYS ----------------------- -->
     
-    <!-- Claim Device Modal -->
-    <div id="claim-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
-        <div class="glass-panel p-6 rounded-xl shadow-[0_0_40px_rgba(0,0,0,0.8)] max-w-md w-full border border-sky-500/30 transform scale-95 opacity-0 transition-all duration-200" id="claim-modal-content">
-            <div class="flex justify-between items-center mb-5">
-                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-widest flex items-center gap-2">
-                    <svg class="w-5 h-5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                    Claim Target Node
-                </h3>
-                <button onclick="closeClaimModal()" type="button" class="text-slate-500 border border-slate-700 rounded hover:text-white hover:bg-rose-500 hover:border-rose-500 transition-colors p-1" title="Close">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
-            </div>
-            
-            <form action="/api/claim" method="POST" id="claim-form"
-                  class="space-y-5 admin-guard-form"
-                  data-success-redirect="/dashboard?top=devices&sub=onboard">
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Target MAC</label>
-                    <input type="text" id="claim-mac" name="mac" readonly class="w-full bg-slate-900/80 border border-slate-700 rounded py-2 px-3 text-sm font-mono text-sky-400 outline-none cursor-not-allowed">
-                </div>
+    {% include 'partials/_modal_claim.html' %}
 
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Assignment Scope</label>
-                    <select name="scope" class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-sky-500 outline-none">
-                        {% for scope_option in scope_options|default([{'value': 'personal', 'label': 'Personal (Isolated)'}]) %}
-                        <option value="{{ scope_option.value }}">{{ scope_option.label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
+    {% include 'partials/_modal_manage_device.html' %}
 
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Fleet (Optional)</label>
-                    <select name="fleet_id" class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-sky-500 outline-none">
-                        <option value="">None (Assign Later)</option>
-                        {% for fleet in fleets %}
-                        <option value="{{ fleet.id }}">{{ fleet.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
+    {% include 'partials/_modal_firmware_tag.html' %}
 
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">ESP32 Hardware Type</label>
-                    <p class="text-[10px] text-sky-400 font-mono mb-1">Device reports compute module: <span id="claim-compute-module-hint">—</span></p>
-                    <input type="text" id="claim-hardware-type" name="hardware_type" list="claim-hardware-type-options" required
-                           placeholder="e.g. S3, C3, C6..."
-                           class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-sky-500 outline-none placeholder-slate-500">
-                    <datalist id="claim-hardware-type-options">
-                        {% for tag in all_tags if tag.category == "hardware" %}
-                        <option value="{{ tag.name }}">
-                        {% endfor %}
-                    </datalist>
-                    <p class="text-[10px] text-slate-500 mt-1">Immutable once claimed. All other tags (location, purpose, carrier board, etc.) are assigned later from Manage Device or the Fleet view.</p>
-                </div>
-                
-                <div class="pt-2 flex gap-3">
-                    <button type="button" onclick="closeClaimModal()" class="flex-1 py-2.5 text-xs font-bold uppercase rounded border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors">Cancel</button>
-                    <button type="submit" class="flex-1 py-2.5 text-xs font-bold uppercase rounded bg-sky-600 text-white hover:bg-sky-500 shadow-[0_0_15px_rgba(14,165,233,0.4)] transition-all">Confirm Claim</button>
-                </div>
-            </form>
-        </div>
-    </div>
+    {% include 'partials/_modal_approve_release.html' %}
 
-    <!-- Manage Device Modal -->
-    <div id="manage-device-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
-        <div id="manage-device-modal-content" class="glass-panel p-6 rounded-xl shadow-[0_0_40px_rgba(0,0,0,0.8)] max-w-lg w-full border border-amber-500/30 transform scale-95 opacity-0 transition-all duration-200">
-            <div class="flex justify-between items-center mb-5">
-                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-widest flex items-center gap-2">
-                    <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-3-3v6m9 0A9 9 0 1112 3a9 9 0 019 9z"></path></svg>
-                    Manage Device
-                </h3>
-                <button onclick="closeManageDeviceModal()" type="button" class="text-slate-500 border border-slate-700 rounded hover:text-white hover:bg-rose-500 hover:border-rose-500 transition-colors p-1" title="Close">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
-            </div>
+    {% include 'partials/_modal_upload.html' %}
 
-            <form action="/api/fleet/devices/__MAC__/update" method="POST" id="manage-device-form" class="space-y-5 admin-guard-form" data-success-redirect="/dashboard?top=devices&sub=fleet">
-                <input type="hidden" name="tags_json" id="manage-device-tags-json" value="">
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Target MAC</label>
-                    <input type="text" id="manage-device-mac" readonly class="w-full bg-slate-900/80 border border-slate-700 rounded py-2 px-3 text-sm font-mono text-amber-300 outline-none cursor-not-allowed">
-                </div>
+    {% include 'partials/_toast.html' %}
 
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Assignment Scope</label>
-                    <select name="scope" id="manage-device-scope" class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none">
-                        {% for scope_option in scope_options|default([{'value': 'personal', 'label': 'Personal (Isolated)'}]) %}
-                        <option value="{{ scope_option.value }}">{{ scope_option.label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Fleet</label>
-                    <select id="manage-device-fleet" name="fleet_id" class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none">
-                        <option value="">None (Unassigned)</option>
-                        {% for fleet in fleets %}
-                        <option value="{{ fleet.id }}">{{ fleet.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Tags</label>
-                    <p class="text-[10px] text-slate-500 mb-2">Hardware type is immutable, set at claim. "Inherited" chips come from the fleet's own tags and apply automatically - editing them here does nothing; edit the fleet itself in Settings. Suggestions are pulled from other devices in the selected fleet - click to add.</p>
-                    <p class="text-[10px] text-slate-600 mb-2 font-mono">Convention: <span class="text-indigo-400">is:</span> / <span class="text-indigo-400">has:</span> for physical facts (firmware, devices) &middot; <span class="text-emerald-400">loc:</span> / <span class="text-emerald-400">env:</span> / <span class="text-emerald-400">does:</span> for organizational facts (fleets)</p>
-                    <div class="space-y-3">
-                        {% for cat in tag_categories|default(["hardware", "firmware_compat", "firmware_feature", "firmware_build", "role", "custom"]) if cat != "hardware" %}
-                        <div>
-                            <div class="flex items-center gap-2">
-                                <label class="text-[9px] font-bold text-slate-500 uppercase min-w-[95px]">{{ cat }}</label>
-                                <div class="tag-category-tags" data-category="{{ cat }}">
-                                    <!-- Populated by JS -->
-                                </div>
-                                <div style="display: flex; gap: 4px;">
-                                    <input type="text" class="flex-1 min-w-0 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 placeholder-slate-500 focus:ring-1 focus:ring-amber-500 outline-none tag-category-input" data-category="{{ cat }}" data-selected-tags="[]" placeholder="Add tag...">
-                                    <button type="button" class="tag-add-btn px-1.5 py-1 text-[9px] bg-amber-600 text-white rounded hover:bg-amber-500 transition-colors" data-category="{{ cat }}">+</button>
-                                    <button type="button" class="tag-create-btn px-1.5 py-1 text-[9px] text-amber-300 hover:text-amber-200 transition-colors" data-category="{{ cat }}">[New]</button>
-                                </div>
-                            </div>
-                            <div class="tag-inherited flex gap-1.5 flex-wrap items-center mt-1 ml-[103px] empty:hidden" data-category="{{ cat }}"></div>
-                            <div class="tag-suggestions flex gap-1.5 flex-wrap mt-1 ml-[103px] empty:hidden" data-category="{{ cat }}"></div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
-
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Direct OTA Targeting</label>
-                    <div class="space-y-3">
-                        <div>
-                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Update Mode</label>
-                            <select id="manage-device-update-mode" name="update_mode" class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none">
-                                <option value="LATEST">Latest (auto-track)</option>
-                                <option value="FIXED">Fixed (specific version)</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Target Firmware Name</label>
-                            <input type="text" id="manage-device-target-firmware-name" name="target_firmware_name" placeholder="e.g. Sparkle" class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none placeholder-slate-500">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Target Firmware Version</label>
-                            <input type="text" id="manage-device-target-firmware-version" name="target_firmware_version" placeholder="e.g. 1.2.3" list="available-firmware-versions" class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none placeholder-slate-500">
-                        </div>
-                        <datalist id="available-firmware-versions">
-                        </datalist>
-                        <div>
-                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">One-Shot Release</label>
-                            <select id="manage-device-target-oneshot" name="target_oneshot_release_id" class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none">
-                                <option value="">None</option>
-                                {% for os_rel in one_shot_releases %}
-                                <option value="{{ os_rel.id }}">#{{ os_rel.id }} — {{ os_rel.filename }} ({{ os_rel.compute_module }})</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <p class="text-[10px] text-slate-500 font-mono">Heartbeat: <span id="manage-device-heartbeat-display">not yet reported</span> (reported by device, not editable)</p>
-                    </div>
-                </div>
-
-                <div class="pt-2 flex gap-3">
-                    <button type="button" onclick="closeManageDeviceModal()" class="flex-1 py-2.5 text-xs font-bold uppercase rounded border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors">Cancel</button>
-                    <button type="submit" class="flex-1 py-2.5 text-xs font-bold uppercase rounded bg-amber-600 text-white hover:bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.35)] transition-all">Save Changes</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Firmware Tag Modal -->
-    <div id="firmware-tag-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
-        <div id="firmware-tag-modal-content" class="glass-panel p-6 rounded-xl shadow-[0_0_40px_rgba(0,0,0,0.8)] max-w-lg w-full border border-amber-500/30 transform scale-95 opacity-0 transition-all duration-200">
-            <div class="flex justify-between items-center mb-5">
-                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-widest flex items-center gap-2">
-                    <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>
-                    Manage Firmware Tags
-                </h3>
-                <button onclick="closeFirmwareTagModal()" type="button" class="text-slate-500 border border-slate-700 rounded hover:text-white hover:bg-rose-500 hover:border-rose-500 transition-colors p-1" title="Close">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
-            </div>
-
-            <form id="firmware-tag-form" method="POST" class="space-y-5">
-                <input type="hidden" id="firmware-tag-release-id" value="">
-                <input type="hidden" id="firmware-tag-target-name" value="">
-
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Firmware</label>
-                    <input type="text" id="firmware-tag-firmware-name" readonly class="w-full bg-slate-900/80 border border-slate-700 rounded py-2 px-3 text-sm font-mono text-amber-300 outline-none cursor-not-allowed">
-                </div>
-
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Tags</label>
-                    <div class="space-y-2">
-                        {% for cat in tag_categories|default(["hardware", "firmware_compat", "firmware_feature", "firmware_build", "role", "custom"]) %}
-                        <div class="flex items-center gap-2">
-                            <label class="text-[9px] font-bold text-slate-500 uppercase min-w-[95px]">{{ cat }}</label>
-                            <div class="firmware-tag-category-tags" data-category="{{ cat }}">
-                            </div>
-                            <div style="display: flex; gap: 4px;">
-                                <input type="text" class="flex-1 min-w-0 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 placeholder-slate-500 focus:ring-1 focus:ring-amber-500 outline-none" data-category="{{ cat }}" data-selected-tags="[]" placeholder="Add tag...">
-                                <button type="button" class="firmware-tag-add-btn px-1.5 py-1 text-[9px] bg-amber-600 text-white rounded hover:bg-amber-500 transition-colors" data-category="{{ cat }}">+</button>
-                                <button type="button" class="firmware-tag-create-btn px-1.5 py-1 text-[9px] text-amber-300 hover:text-amber-200 transition-colors" data-category="{{ cat }}">[New]</button>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                    <input type="hidden" id="firmware-tags-json" value="">
-                </div>
-
-                <div class="pt-2 flex gap-3">
-                    <button type="button" onclick="closeFirmwareTagModal()" class="flex-1 py-2.5 text-xs font-bold uppercase rounded border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors">Cancel</button>
-                    <button type="submit" class="flex-1 py-2.5 text-xs font-bold uppercase rounded bg-amber-600 text-white hover:bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.35)] transition-all">Save Tags</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Approve Release Modal -->
-    <div id="approve-release-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
-        <div id="approve-release-modal-content" class="glass-panel p-6 rounded-xl shadow-[0_0_40px_rgba(0,0,0,0.8)] max-w-md w-full border border-emerald-500/30 transform scale-95 opacity-0 transition-all duration-200">
-            <div class="flex justify-between items-center mb-5">
-                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-widest flex items-center gap-2">
-                    <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                    Approve Release
-                </h3>
-                <button onclick="closeApproveModal()" type="button" class="text-slate-500 border border-slate-700 rounded hover:text-white hover:bg-rose-500 hover:border-rose-500 transition-colors p-1" title="Close">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
-            </div>
-            <form id="approve-release-form" action="/api/releases/0/approve" method="POST" class="space-y-5 admin-guard-form" data-success-redirect="/dashboard?top=firmware&sub=queue">
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Staging Build</label>
-                    <input type="text" id="approve-release-label" readonly class="w-full bg-slate-900/80 border border-slate-700 rounded py-2 px-3 text-sm font-mono text-amber-300 outline-none cursor-not-allowed">
-                </div>
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Version</label>
-                    <input type="text" name="version" id="approve-release-version" placeholder="Loading suggestion..." class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-emerald-500 outline-none">
-                    <p class="text-[10px] text-slate-500 mt-1">Pre-filled with the next patch bump for this target — edit for a different version.</p>
-                </div>
-                <div class="pt-2 flex gap-3">
-                    <button type="button" onclick="closeApproveModal()" class="flex-1 py-2.5 text-xs font-bold uppercase rounded border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors">Cancel</button>
-                    <button type="submit" class="flex-1 py-2.5 text-xs font-bold uppercase rounded bg-emerald-600 text-white hover:bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.35)] transition-all">Approve</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Upload Firmware Modal -->
-    <div id="upload-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
-        <div id="upload-modal-content" class="glass-panel p-6 rounded-xl shadow-[0_0_40px_rgba(0,0,0,0.8)] max-w-lg w-full border border-emerald-500/30 transform scale-95 opacity-0 transition-all duration-200">
-            <div class="flex justify-between items-center mb-5">
-                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-widest flex items-center gap-2">
-                    <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-                    Upload Firmware Payload
-                </h3>
-                <button onclick="closeUploadModal()" type="button" class="text-slate-500 border border-slate-700 rounded hover:text-white hover:bg-rose-500 hover:border-rose-500 transition-colors p-1" title="Close">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
-            </div>
-
-            <form id="upload-form" action="/admin/upload-firmware" method="POST" enctype="multipart/form-data" class="space-y-5">
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Firmware Binary (.bin)</label>
-                    <input type="file" name="file" accept=".bin" required class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 file:mr-3 file:rounded file:border-0 file:bg-emerald-600/80 file:px-3 file:py-1 file:text-xs file:font-bold file:text-white hover:file:bg-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none">
-                </div>
-
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Firmware Name</label>
-                    <input type="text" name="firmware_name" placeholder="e.g. Sparkle" required class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-emerald-500 outline-none placeholder-slate-500">
-                </div>
-
-                <p class="text-[10px] text-slate-500 -mt-2">Versioning is server-owned — this lands in the Release Queue as an unversioned Staging build for approval.</p>
-
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Compute Module Architecture</label>
-                    <select name="compute_module" required class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-emerald-500 outline-none">
-                        {% for cm in compute_modules %}
-                        <option value="{{ cm.id }}">{{ cm.name }}</option>
-                        {% else %}
-                        <option value="" disabled selected>No compute modules yet — upload one via the CLI/M2M uploader first to register it</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Fleet (Optional)</label>
-                    <select name="fleet_id" class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-emerald-500 outline-none">
-                        <option value="">None (Assign Later)</option>
-                        {% for fleet in fleets %}
-                        <option value="{{ fleet.id }}">{{ fleet.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Visibility Scope</label>
-                    <select name="scope" required class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-emerald-500 outline-none">
-                        {% for scope_option in scope_options|default([{'value': 'personal', 'label': 'Personal (Isolated)'}]) %}
-                        <option value="{{ scope_option.value }}">{{ scope_option.label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div class="pt-2 flex gap-3">
-                    <button type="button" onclick="closeUploadModal()" class="flex-1 py-2.5 text-xs font-bold uppercase rounded border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors">Cancel</button>
-                    <button type="submit" id="upload-submit-btn" class="flex-1 py-2.5 text-xs font-bold uppercase rounded bg-emerald-600 text-white hover:bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.35)] transition-all">Upload Payload</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Toast Notifications -->
-    <div id="toast-container" class="fixed top-4 right-4 z-[120] flex flex-col gap-2 pointer-events-none"></div>
-
-    <!-- Upload One-Shot Modal -->
-    <div id="oneshot-upload-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
-        <div id="oneshot-upload-modal-content" class="glass-panel p-6 rounded-xl shadow-[0_0_40px_rgba(0,0,0,0.8)] max-w-lg w-full border border-sky-500/30 transform scale-95 opacity-0 transition-all duration-200">
-            <div class="flex justify-between items-center mb-5">
-                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-widest flex items-center gap-2">
-                    <svg class="w-5 h-5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-                    Upload One-Shot Payload
-                </h3>
-                <button onclick="closeOneshotUploadModal()" type="button" class="text-slate-500 border border-slate-700 rounded hover:text-white hover:bg-rose-500 hover:border-rose-500 transition-colors p-1" title="Close">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
-            </div>
-
-            <form id="oneshot-upload-form" action="/admin/upload-oneshot" method="POST" enctype="multipart/form-data" class="space-y-5 admin-guard-form" data-success-redirect="/dashboard?top=firmware&sub=oneshots">
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Firmware Binary (.bin)</label>
-                    <input type="file" name="file" accept=".bin" required class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 file:mr-3 file:rounded file:border-0 file:bg-sky-600/80 file:px-3 file:py-1 file:text-xs file:font-bold file:text-white hover:file:bg-sky-500 focus:ring-1 focus:ring-sky-500 outline-none">
-                </div>
-
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Compute Module Architecture</label>
-                    <select name="compute_module" required class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-sky-500 outline-none">
-                        {% for cm in compute_modules %}
-                        <option value="{{ cm.id }}">{{ cm.name }}</option>
-                        {% else %}
-                        <option value="" disabled selected>No compute modules registered</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Notes (Optional)</label>
-                    <textarea name="notes" rows="2" placeholder="Brief description of this build..." class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-sky-500 outline-none placeholder-slate-500"></textarea>
-                </div>
-
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Visibility Scope</label>
-                    <select name="scope" required class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-sky-500 outline-none">
-                        {% for scope_option in scope_options|default([{'value': 'personal', 'label': 'Personal (Isolated)'}]) %}
-                        <option value="{{ scope_option.value }}">{{ scope_option.label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <p class="text-[10px] text-slate-500 -mt-2">One-shots are raw binaries for rapid prototyping — no versioning or approval required.</p>
-
-                <div class="pt-2 flex gap-3">
-                    <button type="button" onclick="closeOneshotUploadModal()" class="flex-1 py-2.5 text-xs font-bold uppercase rounded border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors">Cancel</button>
-                    <button type="submit" class="flex-1 py-2.5 text-xs font-bold uppercase rounded bg-sky-600 text-white hover:bg-sky-500 shadow-[0_0_15px_rgba(14,165,233,0.35)] transition-all">Upload One-Shot</button>
-                </div>
-            </form>
-        </div>
-    </div>
+    {% include 'partials/_modal_oneshot_upload.html' %}
 
 
     <!-- -------------------------- SCRIPTS --------------------------- -->
@@ -1838,7 +1330,24 @@
             if (!payload) return fallback;
             if (typeof payload.detail === 'string' && payload.detail.trim()) return payload.detail;
             if (typeof payload.message === 'string' && payload.message.trim()) return payload.message;
+            if (typeof payload.error === 'string' && payload.error.trim()) return payload.error;
             return fallback;
+        }
+
+        async function postJson(url, body) {
+            let res, payload = null;
+            try {
+                res = await fetch(url, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                payload = await res.json().catch(() => null);
+            } catch (_) {
+                return { ok: false, payload: null, networkError: true };
+            }
+            return { ok: res.ok, payload, networkError: false };
         }
 
         function normalizeAdminDeniedMessage(message) {
@@ -3161,11 +2670,271 @@
 
         initOneshotSearchSort();
 
+        // ====== FLEET BOARD (KANBAN) ======
+        // fleet_nodes is already a flat, serialized (non-ORM) list - safe to
+        // tojson directly, unlike `fleets`/`devices` which are raw ORM lists
+        // elsewhere in this template.
+        const BOARD_DEVICES = {{ fleet_nodes | tojson }};
+
+        function boardCardHtml(node) {
+            const statusDot = node.status === 'online'
+                ? '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>'
+                : '<span class="w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>';
+            return `
+                <div class="board-card bg-slate-900/70 border border-slate-700/60 rounded-lg px-2.5 py-2 text-xs cursor-grab active:cursor-grabbing hover:border-sky-500/60 transition-colors" data-mac="${node.mac}">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="font-mono text-sky-300 tracking-wide truncate">${node.mac}</span>
+                        ${statusDot}
+                    </div>
+                    <div class="text-[10px] text-slate-500 font-mono mt-0.5 truncate">${node.compute_module || 'Unknown'} &middot; ${node.fw || 'unknown'}</div>
+                </div>`;
+        }
+
+        // -- Fleets sub-mode: columns = Unassigned + each fleet --------
+        function boardFleetColumnEl(fleetId) {
+            const val = fleetId === null ? '' : String(fleetId);
+            return document.querySelector(`#board-fleets-row .board-column-body[data-fleet-id="${val}"]`);
+        }
+
+        function renderBoardFleetColumn(fleetId) {
+            const col = boardFleetColumnEl(fleetId);
+            if (!col) return;
+            const members = BOARD_DEVICES.filter(n => (n.fleet_id ?? null) === fleetId);
+            col.innerHTML = members.length
+                ? members.map(boardCardHtml).join('')
+                : '<div class="text-[10px] text-slate-600 font-mono text-center py-6 pointer-events-none">Drop here</div>';
+            const countEl = col.closest('.board-column')?.querySelector('.board-column-count');
+            if (countEl) countEl.textContent = members.length;
+        }
+
+        function initBoardFleetsOnce() {
+            if (window.__boardFleetsInit) return;
+            window.__boardFleetsInit = true;
+
+            document.querySelectorAll('#board-fleets-row .board-column-body').forEach((col) => {
+                const fleetId = col.dataset.fleetId ? parseInt(col.dataset.fleetId, 10) : null;
+                renderBoardFleetColumn(fleetId);
+
+                Sortable.create(col, {
+                    group: 'board-fleets',
+                    animation: 150,
+                    ghostClass: 'board-card-ghost',
+                    onEnd: async (evt) => {
+                        if (evt.from === evt.to) return;
+                        const mac = evt.item.dataset.mac;
+                        const fromFleetId = evt.from.dataset.fleetId ? parseInt(evt.from.dataset.fleetId, 10) : null;
+                        const toFleetId = evt.to.dataset.fleetId ? parseInt(evt.to.dataset.fleetId, 10) : null;
+                        const node = BOARD_DEVICES.find(n => n.mac === mac);
+                        const prevFleetId = node ? (node.fleet_id ?? null) : fromFleetId;
+
+                        const { ok, payload } = await postJson('/api/devices/bulk-assign-fleet', { device_macs: [mac], fleet_id: toFleetId });
+                        if (!ok || (payload && payload.skipped)) {
+                            showToast(!ok ? getErrorMessage(payload, 'Could not move device.') : 'No permission to move that device.', 'error');
+                            renderBoardFleetColumn(fromFleetId);
+                            renderBoardFleetColumn(toFleetId);
+                            return;
+                        }
+                        if (node) node.fleet_id = toFleetId;
+                        renderBoardFleetColumn(fromFleetId);
+                        renderBoardFleetColumn(toFleetId);
+                        showToast('Device moved.', 'success');
+                    },
+                });
+            });
+
+            // Drag the Unassigned column header onto a fleet column -> bulk-move
+            // every currently-unassigned device there in one action.
+            const handle = document.getElementById('board-unassigned-handle');
+            handle?.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('text/plain', 'unassigned-bulk');
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            document.querySelectorAll('#board-fleets-row .board-column-header[data-fleet-id]').forEach((header) => {
+                header.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    header.classList.add('board-column-header-dragover');
+                });
+                header.addEventListener('dragleave', () => header.classList.remove('board-column-header-dragover'));
+                header.addEventListener('drop', async (e) => {
+                    header.classList.remove('board-column-header-dragover');
+                    if (e.dataTransfer.getData('text/plain') !== 'unassigned-bulk') return;
+                    e.preventDefault();
+                    const fleetId = parseInt(header.dataset.fleetId, 10);
+                    const unassigned = BOARD_DEVICES.filter(n => !n.fleet_id);
+                    if (!unassigned.length) {
+                        showToast('No unassigned devices to move.', 'info');
+                        return;
+                    }
+                    const fleetName = header.querySelector('span')?.textContent?.trim() || 'this fleet';
+                    if (!window.confirm(`Move all ${unassigned.length} unassigned device(s) to ${fleetName}?`)) return;
+                    const macs = unassigned.map(n => n.mac);
+                    const { ok, payload } = await postJson('/api/devices/bulk-assign-fleet', { device_macs: macs, fleet_id: fleetId });
+                    if (!ok) {
+                        showToast(getErrorMessage(payload, 'Bulk move failed.'), 'error');
+                        return;
+                    }
+                    macs.forEach((mac) => {
+                        const node = BOARD_DEVICES.find(n => n.mac === mac);
+                        if (node) node.fleet_id = fleetId;
+                    });
+                    renderBoardFleetColumn(null);
+                    renderBoardFleetColumn(fleetId);
+                    showToast(`Moved ${payload.assigned} device(s) to ${fleetName}${payload.skipped ? ` (${payload.skipped} skipped - no permission)` : ''}.`, 'success');
+                });
+            });
+        }
+
+        // -- Tags sub-mode: columns = tag values within one category, for one fleet --
+        async function ensureTagOptionsLoaded() {
+            if (allTagOptions.length) return;
+            try {
+                const res = await fetch('/api/tags/manager', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+                const data = await res.json();
+                allTagOptions = data.tags || [];
+            } catch (_) {
+                showToast('Could not load tags.', 'error');
+            }
+        }
+
+        function boardTagColumnHtml(key, label, color) {
+            const isReal = key !== 'none';
+            return `
+                <div class="board-column shrink-0 w-64 bg-slate-800/40 border ${isReal ? 'border-slate-700/60' : 'border-dashed border-slate-600'} rounded-xl flex flex-col">
+                    <div class="board-column-header flex items-center justify-between px-3 py-2.5 border-b border-slate-700/60 gap-2" data-tag-col="${key}">
+                        <span class="text-xs font-bold uppercase tracking-wide truncate ${isReal ? 'text-sky-300' : 'text-slate-400'}" ${isReal ? `style="border-left: 2px solid ${color || '#3b82f6'}; padding-left: 6px;"` : ''} title="${label}">${label}</span>
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <span class="board-column-count text-[10px] font-mono text-slate-500 bg-slate-900/60 rounded-full px-2 py-0.5">0</span>
+                            ${isReal ? `<button type="button" onclick="deleteBoardTagColumn(${key})" title="Delete this tag entirely - affects every device and firmware release using it, fleet-wide" class="text-slate-600 hover:text-rose-400 text-xs leading-none">&times;</button>` : ''}
+                        </div>
+                    </div>
+                    <div class="board-column-body flex-1 min-h-[120px] p-2 space-y-2 overflow-y-auto max-h-[60vh]" data-tag-col="${key}"></div>
+                </div>`;
+        }
+
+        async function handleBoardTagCardMove(mac, category, toColumnKey) {
+            const node = BOARD_DEVICES.find(n => n.mac === mac);
+            if (!node) return false;
+            const currentInCat = node.tags_by_category[category] || [];
+            const removeTagName = currentInCat.length ? currentInCat[0].name : null;
+            const removeTag = removeTagName ? allTagOptions.find(t => t.name === removeTagName && t.category === category) : null;
+            const toTag = toColumnKey === 'none' ? null : allTagOptions.find(t => String(t.id) === String(toColumnKey));
+
+            if (!toTag && !removeTag) return true;
+
+            const body = !toTag
+                ? { device_macs: [mac], tag_id: removeTag.id, action: 'remove' }
+                : { device_macs: [mac], tag_id: toTag.id, action: 'swap', remove_tag_id: removeTag ? removeTag.id : undefined };
+            const { ok, payload } = await postJson('/api/fleet/bulk-tags', body);
+            if (!ok) {
+                showToast(getErrorMessage(payload, 'Could not update tag.'), 'error');
+                return false;
+            }
+            node.tags_by_category[category] = toTag ? [{ name: toTag.name, color: toTag.color }] : [];
+            return true;
+        }
+
+        function renderBoardTags() {
+            const fleetSelect = document.getElementById('board-tags-fleet-select');
+            const catSelect = document.getElementById('board-tags-category-select');
+            const row = document.getElementById('board-tags-row');
+            if (!fleetSelect || !catSelect || !row) return;
+
+            const fleetId = parseInt(fleetSelect.value, 10);
+            const category = catSelect.value;
+            const members = BOARD_DEVICES.filter(n => n.fleet_id === fleetId);
+            const columns = allTagOptions.filter(t => t.category === category);
+
+            row.innerHTML = boardTagColumnHtml('none', `No ${category}`, null)
+                + columns.map(t => boardTagColumnHtml(t.id, t.name, t.color)).join('');
+
+            row.querySelectorAll('.board-column-body').forEach((col) => {
+                const key = col.dataset.tagCol;
+                const colMembers = members.filter((n) => {
+                    const inCat = (n.tags_by_category[category] || []).map(t => t.name);
+                    if (key === 'none') return inCat.length === 0;
+                    const tagDef = columns.find(t => String(t.id) === key);
+                    return tagDef ? inCat.includes(tagDef.name) : false;
+                });
+                col.innerHTML = colMembers.length
+                    ? colMembers.map(boardCardHtml).join('')
+                    : '<div class="text-[10px] text-slate-600 font-mono text-center py-6 pointer-events-none">Drop here</div>';
+                const countEl = col.closest('.board-column')?.querySelector('.board-column-count');
+                if (countEl) countEl.textContent = colMembers.length;
+
+                Sortable.create(col, {
+                    group: `board-tags-${fleetId}-${category}`,
+                    animation: 150,
+                    ghostClass: 'board-card-ghost',
+                    onEnd: async (evt) => {
+                        if (evt.from === evt.to) return;
+                        const mac = evt.item.dataset.mac;
+                        const toKey = evt.to.dataset.tagCol;
+                        const ok = await handleBoardTagCardMove(mac, category, toKey);
+                        renderBoardTags();
+                        if (ok) showToast('Tag updated.', 'success');
+                    },
+                });
+            });
+        }
+
+        async function addBoardTagColumn() {
+            const category = document.getElementById('board-tags-category-select')?.value;
+            if (!category) return;
+            const name = window.prompt(`New tag name for category "${category}":`);
+            if (!name || !name.trim()) return;
+            const { ok, payload } = await postJson('/api/tags', { name: name.trim(), category });
+            if (!ok) {
+                showToast(getErrorMessage(payload, 'Could not create tag.'), 'error');
+                return;
+            }
+            allTagOptions.push(payload);
+            renderBoardTags();
+            showToast(`Added column "${payload.name}".`, 'success');
+        }
+
+        async function deleteBoardTagColumn(tagId) {
+            const tag = allTagOptions.find(t => t.id === tagId);
+            if (!tag) return;
+            if (!window.confirm(`Delete tag "${tag.name}" entirely? This removes it from every device and firmware release that has it, fleet-wide - not just this board.`)) return;
+            try {
+                const res = await fetch(`/api/tags/${tagId}`, { method: 'POST', credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+                if (!res.ok) {
+                    const payload = await res.json().catch(() => null);
+                    showToast(getErrorMessage(payload, 'Could not delete tag.'), 'error');
+                    return;
+                }
+            } catch (_) {
+                showToast('Network error deleting tag.', 'error');
+                return;
+            }
+            allTagOptions = allTagOptions.filter(t => t.id !== tagId);
+            BOARD_DEVICES.forEach((n) => {
+                Object.keys(n.tags_by_category || {}).forEach((cat) => {
+                    n.tags_by_category[cat] = (n.tags_by_category[cat] || []).filter(t => t.name !== tag.name);
+                });
+            });
+            renderBoardTags();
+            showToast(`Deleted tag "${tag.name}".`, 'success');
+        }
+
+        async function setBoardMode(mode) {
+            document.getElementById('board-mode-fleets')?.classList.toggle('hidden', mode !== 'fleets');
+            document.getElementById('board-mode-tags')?.classList.toggle('hidden', mode !== 'tags');
+            document.getElementById('board-mode-fleets-btn')?.classList.toggle('board-mode-btn-active', mode === 'fleets');
+            document.getElementById('board-mode-tags-btn')?.classList.toggle('board-mode-btn-active', mode === 'tags');
+            if (mode === 'tags') {
+                await ensureTagOptionsLoaded();
+                renderBoardTags();
+            }
+        }
+
         // Initialize on load
         document.addEventListener('DOMContentLoaded', () => {
             initTagsManager();
             initFleetCheckboxes();
             initFleetDeployPanel();
+            initBoardFleetsOnce();
+            setBoardMode('fleets');
         });
 
         // ====== MODAL REGISTRY ======

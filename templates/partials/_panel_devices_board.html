@@ -1,0 +1,73 @@
+        <section id="panel-devices-board" class="content-panel space-y-6" data-top="devices" data-sub="board">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-slate-800 pb-4 gap-4">
+                <div>
+                    <h2 class="text-2xl font-light text-slate-200">Fleet Board</h2>
+                    <p class="text-sm text-slate-500 font-mono mt-1">Drag devices between fleets, or between tag groups within one</p>
+                </div>
+                <div class="flex items-center gap-2 bg-slate-800/40 border border-slate-700/60 rounded-lg p-1">
+                    <button type="button" id="board-mode-fleets-btn" class="board-mode-btn px-3 py-1.5 text-[10px] font-bold tracking-widest uppercase rounded transition-all" onclick="setBoardMode('fleets')">Fleets</button>
+                    {% if db_user and db_user.role.value == 'Admin' %}
+                    <button type="button" id="board-mode-tags-btn" class="board-mode-btn px-3 py-1.5 text-[10px] font-bold tracking-widest uppercase rounded transition-all" onclick="setBoardMode('tags')">Tag Groups</button>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- FLEETS MODE: columns = Unassigned + each fleet. Drag a card to reassign
+                 its fleet_id. Drag the Unassigned header onto a fleet column to bulk-move
+                 every unassigned device there in one action. -->
+            <div id="board-mode-fleets" class="board-mode-panel">
+                <div class="flex gap-4 overflow-x-auto pb-4" id="board-fleets-row">
+                    <div class="board-column shrink-0 w-72 bg-slate-800/40 border border-dashed border-slate-600 rounded-xl flex flex-col">
+                        <div class="board-column-header flex items-center justify-between px-3 py-2.5 border-b border-slate-700/60 cursor-grab active:cursor-grabbing" draggable="true" id="board-unassigned-handle" title="Drag this onto a fleet column to move every unassigned device there">
+                            <span class="text-xs font-bold text-slate-300 uppercase tracking-wide">Unassigned</span>
+                            <span class="board-column-count text-[10px] font-mono text-slate-500 bg-slate-900/60 rounded-full px-2 py-0.5">0</span>
+                        </div>
+                        <div class="board-column-body flex-1 min-h-[120px] p-2 space-y-2 overflow-y-auto max-h-[60vh]" data-fleet-id=""></div>
+                    </div>
+                    {% for fleet in fleets %}
+                    <div class="board-column shrink-0 w-72 bg-slate-800/40 border border-slate-700/60 rounded-xl flex flex-col">
+                        <div class="board-column-header flex items-center justify-between px-3 py-2.5 border-b border-slate-700/60" data-fleet-id="{{ fleet.id }}">
+                            <span class="text-xs font-bold text-sky-300 uppercase tracking-wide truncate" title="{{ fleet.name }}">{{ fleet.name }}</span>
+                            <span class="board-column-count text-[10px] font-mono text-slate-500 bg-slate-900/60 rounded-full px-2 py-0.5">0</span>
+                        </div>
+                        <div class="board-column-body flex-1 min-h-[120px] p-2 space-y-2 overflow-y-auto max-h-[60vh]" data-fleet-id="{{ fleet.id }}"></div>
+                    </div>
+                    {% else %}
+                    {{ empty_state("No fleets configured yet. Create one from Settings to start organizing devices.") }}
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- TAGS MODE: pick a fleet + a tag category, columns = each tag value in
+                 that category used by devices in the fleet (+ "No <category>"). Drag a
+                 card between columns to swap that category's tag. Admin-only, since the
+                 backing /api/fleet/bulk-tags endpoint is admin-only. -->
+            {% if db_user and db_user.role.value == 'Admin' %}
+            <div id="board-mode-tags" class="board-mode-panel hidden">
+                {% if fleets %}
+                <div class="flex flex-wrap items-end gap-3 mb-4">
+                    <div>
+                        <label class="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Fleet</label>
+                        <select id="board-tags-fleet-select" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 focus:ring-1 focus:ring-sky-500 outline-none" onchange="renderBoardTags()">
+                            {% for fleet in fleets %}
+                            <option value="{{ fleet.id }}">{{ fleet.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Group By</label>
+                        <select id="board-tags-category-select" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 focus:ring-1 focus:ring-sky-500 outline-none" onchange="renderBoardTags()">
+                            {% for cat, desc in tag_categories.items() %}
+                            <option value="{{ cat }}" {% if cat == 'role' %}selected{% endif %} title="{{ desc }}">{{ cat }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button type="button" onclick="addBoardTagColumn()" class="px-3 py-1.5 text-[10px] font-bold tracking-widest uppercase rounded bg-sky-600/20 text-sky-300 border border-sky-500/60 hover:bg-sky-500 hover:text-white transition-all">+ Add Column</button>
+                </div>
+                <div class="flex gap-4 overflow-x-auto pb-4" id="board-tags-row"></div>
+                {% else %}
+                {{ empty_state("No fleets configured yet. Tag groups are scoped to one fleet at a time.") }}
+                {% endif %}
+            </div>
+            {% endif %}
+        </section>

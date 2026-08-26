@@ -1,0 +1,61 @@
+    <!-- Claim Device Modal -->
+    <div id="claim-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+        <div class="glass-panel p-6 rounded-xl shadow-[0_0_40px_rgba(0,0,0,0.8)] max-w-md w-full border border-sky-500/30 transform scale-95 opacity-0 transition-all duration-200" id="claim-modal-content">
+            <div class="flex justify-between items-center mb-5">
+                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-widest flex items-center gap-2">
+                    <svg class="w-5 h-5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    Claim Target Node
+                </h3>
+                <button onclick="closeClaimModal()" type="button" class="text-slate-500 border border-slate-700 rounded hover:text-white hover:bg-rose-500 hover:border-rose-500 transition-colors p-1" title="Close">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            
+            <form action="/api/claim" method="POST" id="claim-form"
+                  class="space-y-5 admin-guard-form"
+                  data-success-redirect="/dashboard?top=devices&sub=onboard">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Target MAC</label>
+                    <input type="text" id="claim-mac" name="mac" readonly class="w-full bg-slate-900/80 border border-slate-700 rounded py-2 px-3 text-sm font-mono text-sky-400 outline-none cursor-not-allowed">
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Assignment Scope</label>
+                    <select name="scope" class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-sky-500 outline-none">
+                        {% for scope_option in scope_options|default([{'value': 'personal', 'label': 'Personal (Isolated)'}]) %}
+                        <option value="{{ scope_option.value }}">{{ scope_option.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Fleet (Optional)</label>
+                    <select name="fleet_id" class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-sky-500 outline-none">
+                        <option value="">None (Assign Later)</option>
+                        {% for fleet in fleets %}
+                        <option value="{{ fleet.id }}">{{ fleet.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">ESP32 Hardware Type</label>
+                    <p class="text-[10px] text-sky-400 font-mono mb-1">Device reports compute module: <span id="claim-compute-module-hint">—</span></p>
+                    <input type="text" id="claim-hardware-type" name="hardware_type" list="claim-hardware-type-options" required
+                           placeholder="e.g. S3, C3, C6..."
+                           class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-sky-500 outline-none placeholder-slate-500">
+                    <datalist id="claim-hardware-type-options">
+                        {% for tag in all_tags if tag.category == "hardware" %}
+                        <option value="{{ tag.name }}">
+                        {% endfor %}
+                    </datalist>
+                    <p class="text-[10px] text-slate-500 mt-1">Immutable once claimed. All other tags (location, purpose, carrier board, etc.) are assigned later from Manage Device or the Fleet view.</p>
+                </div>
+                
+                <div class="pt-2 flex gap-3">
+                    <button type="button" onclick="closeClaimModal()" class="flex-1 py-2.5 text-xs font-bold uppercase rounded border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors">Cancel</button>
+                    <button type="submit" class="flex-1 py-2.5 text-xs font-bold uppercase rounded bg-sky-600 text-white hover:bg-sky-500 shadow-[0_0_15px_rgba(14,165,233,0.4)] transition-all">Confirm Claim</button>
+                </div>
+            </form>
+        </div>
+    </div>

@@ -1,0 +1,49 @@
+        <!-- Fleet Edit Modal -->
+        <div id="fleet-edit-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+            <div class="glass-panel p-6 rounded-xl shadow-[0_0_40px_rgba(0,0,0,0.8)] max-w-lg w-full border border-violet-500/30 transform scale-95 opacity-0 transition-all duration-200">
+                <div class="flex justify-between items-center mb-5">
+                    <h3 class="text-sm font-bold text-slate-200 uppercase tracking-widest flex items-center gap-2">
+                        <svg class="w-5 h-5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                        Edit Fleet
+                    </h3>
+                    <button onclick="closeFleetEditModal()" type="button" class="text-slate-500 border border-slate-700 rounded hover:text-white hover:bg-rose-500 hover:border-rose-500 transition-colors p-1" title="Close">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+
+                <form id="fleet-edit-form" method="POST" class="space-y-5">
+                    <input type="hidden" id="fleet-edit-id" value="">
+                    <input type="hidden" id="fleet-edit-tags-json" value="">
+
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Fleet Name</label>
+                        <input type="text" id="fleet-edit-name" name="name" required class="w-full bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-violet-500 focus:border-violet-500 text-slate-200">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Description</label>
+                        <textarea id="fleet-edit-description" name="description" rows="2" class="w-full bg-slate-800/80 border border-slate-700 rounded-md py-2 px-3 text-sm focus:ring-1 focus:ring-violet-500 focus:border-violet-500 text-slate-200"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Tags</label>
+                        <div class="space-y-2">
+                            {% for cat in tag_categories|default(["hardware", "firmware_compat", "firmware_feature", "firmware_build", "role", "custom"]) %}
+                            <div class="flex items-center gap-2">
+                                <label class="text-[9px] font-bold text-slate-500 uppercase min-w-[95px]">{{ cat }}</label>
+                                <div class="fleet-edit-category-tags" data-category="{{ cat }}"></div>
+                                <div style="display: flex; gap: 4px;">
+                                    <input type="text" class="flex-1 min-w-0 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 placeholder-slate-500 focus:ring-1 focus:ring-violet-500 outline-none" data-category="{{ cat }}" data-selected-tags="[]" placeholder="Add tag...">
+                                    <button type="button" class="fleet-edit-tag-add-btn px-1.5 py-1 text-[9px] bg-violet-600 text-white rounded hover:bg-violet-500 transition-colors" data-category="{{ cat }}">+</button>
+                                    <button type="button" class="fleet-edit-tag-create-btn px-1.5 py-1 text-[9px] text-amber-300 hover:text-amber-200 transition-colors" data-category="{{ cat }}">[New]</button>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="pt-2 flex gap-3">
+                        <button type="button" onclick="closeFleetEditModal()" class="flex-1 py-2.5 text-xs font-bold uppercase rounded border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors">Cancel</button>
+                        <button type="submit" class="flex-1 py-2.5 text-xs font-bold uppercase rounded bg-violet-600 text-white hover:bg-violet-500 shadow-[0_0_15px_rgba(139,92,246,0.35)] transition-all">Save Fleet</button>
+                    </div>
+                </form>
+            </div>
+        </div>

@@ -1,0 +1,48 @@
+    <!-- Firmware Tag Modal -->
+    <div id="firmware-tag-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+        <div id="firmware-tag-modal-content" class="glass-panel p-6 rounded-xl shadow-[0_0_40px_rgba(0,0,0,0.8)] max-w-lg w-full border border-amber-500/30 transform scale-95 opacity-0 transition-all duration-200">
+            <div class="flex justify-between items-center mb-5">
+                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-widest flex items-center gap-2">
+                    <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>
+                    Manage Firmware Tags
+                </h3>
+                <button onclick="closeFirmwareTagModal()" type="button" class="text-slate-500 border border-slate-700 rounded hover:text-white hover:bg-rose-500 hover:border-rose-500 transition-colors p-1" title="Close">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <form id="firmware-tag-form" method="POST" class="space-y-5">
+                <input type="hidden" id="firmware-tag-release-id" value="">
+                <input type="hidden" id="firmware-tag-target-name" value="">
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Firmware</label>
+                    <input type="text" id="firmware-tag-firmware-name" readonly class="w-full bg-slate-900/80 border border-slate-700 rounded py-2 px-3 text-sm font-mono text-amber-300 outline-none cursor-not-allowed">
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Tags</label>
+                    <div class="space-y-2">
+                        {% for cat in tag_categories|default(["hardware", "firmware_compat", "firmware_feature", "firmware_build", "role", "custom"]) %}
+                        <div class="flex items-center gap-2">
+                            <label class="text-[9px] font-bold text-slate-500 uppercase min-w-[95px]">{{ cat }}</label>
+                            <div class="firmware-tag-category-tags" data-category="{{ cat }}">
+                            </div>
+                            <div style="display: flex; gap: 4px;">
+                                <input type="text" class="flex-1 min-w-0 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 placeholder-slate-500 focus:ring-1 focus:ring-amber-500 outline-none" data-category="{{ cat }}" data-selected-tags="[]" placeholder="Add tag...">
+                                <button type="button" class="firmware-tag-add-btn px-1.5 py-1 text-[9px] bg-amber-600 text-white rounded hover:bg-amber-500 transition-colors" data-category="{{ cat }}">+</button>
+                                <button type="button" class="firmware-tag-create-btn px-1.5 py-1 text-[9px] text-amber-300 hover:text-amber-200 transition-colors" data-category="{{ cat }}">[New]</button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <input type="hidden" id="firmware-tags-json" value="">
+                </div>
+
+                <div class="pt-2 flex gap-3">
+                    <button type="button" onclick="closeFirmwareTagModal()" class="flex-1 py-2.5 text-xs font-bold uppercase rounded border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors">Cancel</button>
+                    <button type="submit" class="flex-1 py-2.5 text-xs font-bold uppercase rounded bg-amber-600 text-white hover:bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.35)] transition-all">Save Tags</button>
+                </div>
+            </form>
+        </div>
+    </div>

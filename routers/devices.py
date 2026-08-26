@@ -377,6 +377,57 @@ def force_update(
 
 
 # =============================================================================
+# Board (Kanban) - Bulk Fleet Assignment
+# =============================================================================
+
+@router.post("/api/devices/bulk-assign-fleet")
+def bulk_assign_fleet(
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Reassign one or more claimed devices to a fleet (or to no fleet, if
+    fleet_id is null) in a single call. Backs the kanban Board's device<->
+    fleet drag-and-drop, both single-card drags and the bulk "move all
+    unassigned" gesture.
+
+    Permission mirrors the existing single-device manage form
+    (has_scope_permission per device) rather than require_admin, so
+    non-admin team members can still drag their own scoped devices - a
+    device lacking permission is silently skipped rather than failing the
+    whole batch, since a mixed-permission selection is expected from the
+    "move all unassigned" gesture.
+    """
+    macs = body.get("device_macs", [])
+    fleet_id = body.get("fleet_id")
+
+    if not macs:
+        return JSONResponse(status_code=400, content={"error": "device_macs required."})
+
+    if fleet_id is not None:
+        if not db.query(Fleet).filter(Fleet.id == fleet_id).first():
+            return JSONResponse(status_code=404, content={"error": "Fleet not found."})
+
+    assigned = 0
+    skipped = 0
+
+    for mac in macs:
+        device = db.query(Device).filter(Device.mac_address == mac).first()
+        if not device or not device.claimed:
+            skipped += 1
+            continue
+        if not has_scope_permission(current_user, device.scope_type or ScopeType.Personal, device.scope_id or current_user.id):
+            skipped += 1
+            continue
+        device.fleet_id = fleet_id
+        assigned += 1
+
+    db.commit()
+    return JSONResponse(status_code=200, content={"assigned": assigned, "skipped": skipped, "fleet_id": fleet_id})
+
+
+# =============================================================================
 # Bulk Device Tag Editing
 # =============================================================================
 
@@ -386,11 +437,18 @@ async def bulk_device_tags(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
+    """
+    action: "add" | "remove" | "swap". "swap" removes remove_tag_id (if
+    present on the device) and adds tag_id in a single call - used by the
+    kanban Board's tag-group columns so a drag between columns is one
+    atomic request instead of two.
+    """
     _ = current_user
 
     macs = body.get("device_macs", [])
     tag_id = body.get("tag_id")
     action = body.get("action", "add")
+    remove_tag_id = body.get("remove_tag_id")
 
     if not macs or not tag_id:
         return JSONResponse(status_code=400, content={"error": "MACs and tag_id required."})
@@ -398,6 +456,8 @@ async def bulk_device_tags(
     tag = db.query(Tag).filter(Tag.id == tag_id).first()
     if not tag:
         return JSONResponse(status_code=404, content={"error": "Tag not found."})
+
+    remove_tag = db.query(Tag).filter(Tag.id == remove_tag_id).first() if (action == "swap" and remove_tag_id) else None
 
     added = 0
     removed = 0
@@ -415,6 +475,13 @@ async def bulk_device_tags(
             if tag in device.tags:
                 device.tags.remove(tag)
                 removed += 1
+        elif action == "swap":
+            if remove_tag and remove_tag in device.tags:
+                device.tags.remove(remove_tag)
+                removed += 1
+            if tag not in device.tags:
+                device.tags.append(tag)
+                added += 1
 
     db.commit()
     return JSONResponse(status_code=200, content={"added": added, "removed": removed})

@@ -1,0 +1,59 @@
+    <nav class="bg-slate-900/90 backdrop-blur border-b border-slate-800 p-4 sticky top-0 z-50 shadow-2xl">
+        <div class="max-w-7xl mx-auto space-y-4">
+            <div class="flex items-center justify-between gap-4">
+                <div class="flex items-center space-x-3">
+                <svg class="w-8 h-8 text-sky-500 shrink-0 drop-shadow-[0_0_8px_rgba(14,165,233,0.8)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"></path>
+                </svg>
+                <h1 class="text-2xl font-bold tracking-widest text-slate-100 header-glow uppercase">ESP FLEET</h1>
+                </div>
+
+                <div class="text-slate-400 font-mono text-sm tracking-wide hidden lg:block">
+                    SYS: <span id="clock" class="text-sky-300"></span>
+                </div>
+
+                <div class="flex items-center gap-3 bg-slate-800/80 border border-slate-700 rounded-lg px-3 py-1.5 shadow-inner">
+                    <div class="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)] animate-pulse"></div>
+                    <span class="text-slate-300 text-xs font-mono tracking-wide">{{ user.email if user else 'Operator' }}</span>
+                    {% if db_user and db_user.role.value == 'Admin' %}
+                        <span class="text-[9px] font-bold uppercase bg-rose-900/50 text-rose-400 px-1.5 py-0.5 rounded border border-rose-800/50">Admin</span>
+                    {% endif %}
+                    <a href="/logout" class="ml-2 text-[10px] font-bold tracking-wider uppercase text-slate-400 hover:text-rose-400 transition-colors">Log Out</a>
+                </div>
+            </div>
+
+                <div class="flex flex-wrap items-center gap-2 border border-slate-700/60 bg-slate-800/40 rounded-xl p-1" id="top-level-nav">
+                    <button class="top-tab-btn px-4 py-2 text-xs font-bold tracking-widest uppercase rounded-lg transition-all" data-top="devices">Devices</button>
+                    <button class="top-tab-btn px-4 py-2 text-xs font-bold tracking-widest uppercase rounded-lg transition-all" data-top="firmware">Firmware</button>
+                    <button class="top-tab-btn px-4 py-2 text-xs font-bold tracking-widest uppercase rounded-lg transition-all" data-top="settings">Settings</button>
+                </div>
+
+            <div class="border border-slate-700/60 bg-slate-800/30 rounded-xl px-3 py-2" id="sub-nav-container">
+                <div class="subnav-group flex-wrap gap-2" data-top="devices">
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="devices" data-sub="onboard" title="Claim unassigned devices that have phoned in">Onboard</button>
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="devices" data-sub="fleet" title="Manage claimed devices - assign to a fleet, edit tags, set direct OTA targeting">Manage</button>
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="devices" data-sub="board" title="Drag-and-drop devices between fleets, and between tag groups within a fleet">Board</button>
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="devices" data-sub="deploy" title="Push firmware to a fleet with tag-gap review before committing">Deploy</button>
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="devices" data-sub="audit" title="Review each fleet's tag/hardware groups and catch partial firmware rollouts">Fleet Audit</button>
+                </div>
+
+                <div class="subnav-group flex-wrap gap-2" data-top="firmware">
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="firmware" data-sub="queue">Release Queue</button>
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="firmware" data-sub="warehouse">Warehouse</button>
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="firmware" data-sub="oneshots">One-Shots</button>
+                </div>
+
+                <div class="subnav-group flex-wrap gap-2" data-top="settings">
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="settings" data-sub="profile">My Profile</button>
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="settings" data-sub="tokens">My Tokens</button>
+                    {% if db_user and db_user.role.value == 'Admin' %}
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="settings" data-sub="teams">Teams</button>
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="settings" data-sub="tags">Tags</button>
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="settings" data-sub="fleets">Fleets</button>
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="settings" data-sub="access">Access</button>
+                    <button class="sub-tab-btn px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase rounded-full transition-all" data-top="settings" data-sub="root-tokens">Root Tokens</button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>

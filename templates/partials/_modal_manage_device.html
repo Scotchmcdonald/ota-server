@@ -1,0 +1,104 @@
+    <!-- Manage Device Modal -->
+    <div id="manage-device-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+        <div id="manage-device-modal-content" class="glass-panel p-6 rounded-xl shadow-[0_0_40px_rgba(0,0,0,0.8)] max-w-lg w-full border border-amber-500/30 transform scale-95 opacity-0 transition-all duration-200">
+            <div class="flex justify-between items-center mb-5">
+                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-widest flex items-center gap-2">
+                    <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-3-3v6m9 0A9 9 0 1112 3a9 9 0 019 9z"></path></svg>
+                    Manage Device
+                </h3>
+                <button onclick="closeManageDeviceModal()" type="button" class="text-slate-500 border border-slate-700 rounded hover:text-white hover:bg-rose-500 hover:border-rose-500 transition-colors p-1" title="Close">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <form action="/api/fleet/devices/__MAC__/update" method="POST" id="manage-device-form" class="space-y-5 admin-guard-form" data-success-redirect="/dashboard?top=devices&sub=fleet">
+                <input type="hidden" name="tags_json" id="manage-device-tags-json" value="">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Target MAC</label>
+                    <input type="text" id="manage-device-mac" readonly class="w-full bg-slate-900/80 border border-slate-700 rounded py-2 px-3 text-sm font-mono text-amber-300 outline-none cursor-not-allowed">
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Assignment Scope</label>
+                    <select name="scope" id="manage-device-scope" class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none">
+                        {% for scope_option in scope_options|default([{'value': 'personal', 'label': 'Personal (Isolated)'}]) %}
+                        <option value="{{ scope_option.value }}">{{ scope_option.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Fleet</label>
+                    <select id="manage-device-fleet" name="fleet_id" class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none">
+                        <option value="">None (Unassigned)</option>
+                        {% for fleet in fleets %}
+                        <option value="{{ fleet.id }}">{{ fleet.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Tags</label>
+                    <p class="text-[10px] text-slate-500 mb-2">Hardware type is immutable, set at claim. "Inherited" chips come from the fleet's own tags and apply automatically - editing them here does nothing; edit the fleet itself in Settings. Suggestions are pulled from other devices in the selected fleet - click to add.</p>
+                    <p class="text-[10px] text-slate-600 mb-2 font-mono">Convention: <span class="text-indigo-400">is:</span> / <span class="text-indigo-400">has:</span> for physical facts (firmware, devices) &middot; <span class="text-emerald-400">loc:</span> / <span class="text-emerald-400">env:</span> / <span class="text-emerald-400">does:</span> for organizational facts (fleets)</p>
+                    <div class="space-y-3">
+                        {% for cat in tag_categories|default(["hardware", "firmware_compat", "firmware_feature", "firmware_build", "role", "custom"]) if cat != "hardware" %}
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <label class="text-[9px] font-bold text-slate-500 uppercase min-w-[95px]">{{ cat }}</label>
+                                <div class="tag-category-tags" data-category="{{ cat }}">
+                                    <!-- Populated by JS -->
+                                </div>
+                                <div style="display: flex; gap: 4px;">
+                                    <input type="text" class="flex-1 min-w-0 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 placeholder-slate-500 focus:ring-1 focus:ring-amber-500 outline-none tag-category-input" data-category="{{ cat }}" data-selected-tags="[]" placeholder="Add tag...">
+                                    <button type="button" class="tag-add-btn px-1.5 py-1 text-[9px] bg-amber-600 text-white rounded hover:bg-amber-500 transition-colors" data-category="{{ cat }}">+</button>
+                                    <button type="button" class="tag-create-btn px-1.5 py-1 text-[9px] text-amber-300 hover:text-amber-200 transition-colors" data-category="{{ cat }}">[New]</button>
+                                </div>
+                            </div>
+                            <div class="tag-inherited flex gap-1.5 flex-wrap items-center mt-1 ml-[103px] empty:hidden" data-category="{{ cat }}"></div>
+                            <div class="tag-suggestions flex gap-1.5 flex-wrap mt-1 ml-[103px] empty:hidden" data-category="{{ cat }}"></div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Direct OTA Targeting</label>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Update Mode</label>
+                            <select id="manage-device-update-mode" name="update_mode" class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none">
+                                <option value="LATEST">Latest (auto-track)</option>
+                                <option value="FIXED">Fixed (specific version)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Target Firmware Name</label>
+                            <input type="text" id="manage-device-target-firmware-name" name="target_firmware_name" placeholder="e.g. Sparkle" class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none placeholder-slate-500">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Target Firmware Version</label>
+                            <input type="text" id="manage-device-target-firmware-version" name="target_firmware_version" placeholder="e.g. 1.2.3" list="available-firmware-versions" class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none placeholder-slate-500">
+                        </div>
+                        <datalist id="available-firmware-versions">
+                        </datalist>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">One-Shot Release</label>
+                            <select id="manage-device-target-oneshot" name="target_oneshot_release_id" class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none">
+                                <option value="">None</option>
+                                {% for os_rel in one_shot_releases %}
+                                <option value="{{ os_rel.id }}">#{{ os_rel.id }} — {{ os_rel.filename }} ({{ os_rel.compute_module }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <p class="text-[10px] text-slate-500 font-mono">Heartbeat: <span id="manage-device-heartbeat-display">not yet reported</span> (reported by device, not editable)</p>
+                    </div>
+                </div>
+
+                <div class="pt-2 flex gap-3">
+                    <button type="button" onclick="closeManageDeviceModal()" class="flex-1 py-2.5 text-xs font-bold uppercase rounded border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors">Cancel</button>
+                    <button type="submit" class="flex-1 py-2.5 text-xs font-bold uppercase rounded bg-amber-600 text-white hover:bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.35)] transition-all">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>

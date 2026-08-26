@@ -1,0 +1,53 @@
+    <!-- Upload One-Shot Modal -->
+    <div id="oneshot-upload-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+        <div id="oneshot-upload-modal-content" class="glass-panel p-6 rounded-xl shadow-[0_0_40px_rgba(0,0,0,0.8)] max-w-lg w-full border border-sky-500/30 transform scale-95 opacity-0 transition-all duration-200">
+            <div class="flex justify-between items-center mb-5">
+                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-widest flex items-center gap-2">
+                    <svg class="w-5 h-5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                    Upload One-Shot Payload
+                </h3>
+                <button onclick="closeOneshotUploadModal()" type="button" class="text-slate-500 border border-slate-700 rounded hover:text-white hover:bg-rose-500 hover:border-rose-500 transition-colors p-1" title="Close">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <form id="oneshot-upload-form" action="/admin/upload-oneshot" method="POST" enctype="multipart/form-data" class="space-y-5 admin-guard-form" data-success-redirect="/dashboard?top=firmware&sub=oneshots">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Firmware Binary (.bin)</label>
+                    <input type="file" name="file" accept=".bin" required class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 file:mr-3 file:rounded file:border-0 file:bg-sky-600/80 file:px-3 file:py-1 file:text-xs file:font-bold file:text-white hover:file:bg-sky-500 focus:ring-1 focus:ring-sky-500 outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Compute Module Architecture</label>
+                    <select name="compute_module" required class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-sky-500 outline-none">
+                        {% for cm in compute_modules %}
+                        <option value="{{ cm.id }}">{{ cm.name }}</option>
+                        {% else %}
+                        <option value="" disabled selected>No compute modules registered</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Notes (Optional)</label>
+                    <textarea name="notes" rows="2" placeholder="Brief description of this build..." class="w-full bg-slate-800 border border-slate-700 rounded py-2 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-sky-500 outline-none placeholder-slate-500"></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Visibility Scope</label>
+                    <select name="scope" required class="w-full bg-slate-800 border border-slate-700 rounded py-2.5 px-3 text-sm text-slate-200 focus:ring-1 focus:ring-sky-500 outline-none">
+                        {% for scope_option in scope_options|default([{'value': 'personal', 'label': 'Personal (Isolated)'}]) %}
+                        <option value="{{ scope_option.value }}">{{ scope_option.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <p class="text-[10px] text-slate-500 -mt-2">One-shots are raw binaries for rapid prototyping — no versioning or approval required.</p>
+
+                <div class="pt-2 flex gap-3">
+                    <button type="button" onclick="closeOneshotUploadModal()" class="flex-1 py-2.5 text-xs font-bold uppercase rounded border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors">Cancel</button>
+                    <button type="submit" class="flex-1 py-2.5 text-xs font-bold uppercase rounded bg-sky-600 text-white hover:bg-sky-500 shadow-[0_0_15px_rgba(14,165,233,0.35)] transition-all">Upload One-Shot</button>
+                </div>
+            </form>
+        </div>
+    </div>
