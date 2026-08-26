@@ -2,17 +2,32 @@ import os
 import secrets
 from datetime import datetime
 from typing import Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.responses import FileResponse, JSONResponse, Response
 from packaging.version import parse as parse_version
 from sqlalchemy.orm import Session
 
+from config import AFTER_HOURS_TZ
 from database import get_db, FIRMWARE_DIR
 from utils import is_newer_version, _tag_gap, _effective_device_tags
 from models import Device, OneShotRelease, VersionedRelease, ReleaseStatus, UpdateMode, DeviceUpdateStatus, FleetUpdatePolicy
 
 router = APIRouter()
+
+
+def _is_after_hours_now() -> bool:
+    """
+    True between 00:00-05:00 in AFTER_HOURS_TZ (config.py), independent of
+    the container's own system time. Falls back to UTC if the configured
+    zone name is invalid, rather than raising out of the request path.
+    """
+    try:
+        tz = ZoneInfo(AFTER_HOURS_TZ)
+    except ZoneInfoNotFoundError:
+        tz = ZoneInfo("UTC")
+    return 0 <= datetime.now(tz).hour < 5
 
 
 @router.post("/check-update")
@@ -35,9 +50,21 @@ def check_update(
     # The device generates its own secret on first boot (esp_fill_random,
     # see fleet_nvs.c) and sends it on every call, claimed or not - the
     # server has no channel to push a secret down to the device, so it must
-    # adopt whatever the device already generated as the canonical secret,
-    # never invent its own. Kept in sync on every unclaimed check-in too,
-    # in case the device is factory-reset/re-flashed before being claimed.
+    # adopt whatever the device reports as the canonical secret, never
+    # invent its own.
+    #
+    # First-write-wins, deliberately: the secret is locked in at first
+    # contact for a given MAC and never overwritten by a later request.
+    # MAC addresses aren't secret and this endpoint is internet-facing, so
+    # silently re-adopting a "changed" secret on every unclaimed check-in
+    # (an earlier version of this code did that) would let anyone who
+    # knows/guesses a MAC currently sitting unclaimed spoof one request and
+    # hijack that row's identity before the admin clicks Claim - locking
+    # the real device out permanently once claimed, since claiming never
+    # touches the secret either (see routers/devices.py). A genuine
+    # re-flash-before-claim (which also regenerates the device's secret)
+    # is recovered via the Onboard tab's "Purge Unassigned" action, not by
+    # this endpoint silently trusting whichever request arrives last.
     device = db.query(Device).filter(Device.mac_address == x_device_mac).first()
     if not device:
         db.add(Device(
@@ -52,9 +79,6 @@ def check_update(
         return Response(status_code=204)
 
     if not device.claimed:
-        if device.secret != x_device_secret:
-            device.secret = x_device_secret
-            db.commit()
         return Response(status_code=204)
 
     # Step 2: Authenticate
@@ -78,13 +102,24 @@ def check_update(
         except ValueError:
             pass
 
-    # Confirm a previously-dispatched update: if the device now reports
-    # exactly the version we last sent it, the OTA succeeded. Resolution
-    # below will naturally return 204 for this same case (not newer than
-    # what's already installed) - this just records that outcome.
-    if device.pending_firmware_version and x_firmware_version == device.pending_firmware_version:
-        device.update_status = DeviceUpdateStatus.SUCCESS
-        device.pending_firmware_version = None
+    # Confirm (or refute) a previously-dispatched update. The device blocks
+    # synchronously on esp_https_ota_perform() for the whole download inside
+    # the same HTTP call that got DOWNLOADING set - it never sends a
+    # separate "still downloading" heartbeat mid-transfer - so any check-in
+    # that arrives while pending_firmware_version is set necessarily means
+    # that attempt has already concluded one way or the other. If it now
+    # reports exactly what we sent, the OTA succeeded (resolution below
+    # will naturally return 204 for this same case, not newer than what's
+    # installed). If it reports anything else, the device rebooted (or
+    # never received the update) still running its old version - WiFi/power
+    # loss mid-download, a corrupt image, etc. Recorded as FAILED; does not
+    # block resolution below from retrying the same or a different release.
+    if device.pending_firmware_version:
+        if x_firmware_version == device.pending_firmware_version:
+            device.update_status = DeviceUpdateStatus.SUCCESS
+            device.pending_firmware_version = None
+        else:
+            device.update_status = DeviceUpdateStatus.FAILED
 
     db.commit()
 
@@ -166,7 +201,7 @@ def check_update(
                 if fleet.update_policy == FleetUpdatePolicy.NOTIFY_ONLY:
                     return Response(status_code=204)
                 if fleet.update_policy == FleetUpdatePolicy.AFTER_HOURS:
-                    if not (0 <= datetime.utcnow().hour < 5):
+                    if not _is_after_hours_now():
                         return Response(status_code=204)
             name = fleet.target_firmware_name
             version = fleet.target_firmware_version or None
