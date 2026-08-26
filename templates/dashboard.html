@@ -47,6 +47,22 @@
         {% endif %}
     {% endmacro %}
 
+    {# Reusable empty-state block: subtle icon + message + optional CTA.
+       Renders bare content only (no <tr>/<td> or outer wrapper) so it drops
+       into either a <tbody> row (wrap in <tr><td colspan="N">...</td></tr>)
+       or a plain container (Warehouse tree, Fleet Audit). #}
+    {% macro empty_state(message, cta_label=None, cta_onclick=None) %}
+        <div class="flex flex-col items-center justify-center gap-3 py-10 text-center">
+            <svg class="w-9 h-9 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V7a2 2 0 00-2-2H6a2 2 0 00-2 2v6m16 0l-2.5 5a2 2 0 01-1.8 1.1H8.3a2 2 0 01-1.8-1.1L4 13m16 0h-4.5a1 1 0 00-.9.55l-.7 1.4a1 1 0 01-.9.55h-2a1 1 0 01-.9-.55l-.7-1.4a1 1 0 00-.9-.55H4"></path>
+            </svg>
+            <p class="text-slate-500 font-mono text-xs max-w-xs">{{ message }}</p>
+            {% if cta_label and cta_onclick %}
+            <button type="button" onclick="{{ cta_onclick }}" class="mt-1 px-3 py-1.5 text-[10px] font-bold tracking-widest uppercase rounded bg-sky-600/20 text-sky-300 border border-sky-500/60 hover:bg-sky-500 hover:text-white transition-all">{{ cta_label }}</button>
+            {% endif %}
+        </div>
+    {% endmacro %}
+
     <!-- --------------------------- NAVBAR --------------------------- -->
     <nav class="bg-slate-900/90 backdrop-blur border-b border-slate-800 p-4 sticky top-0 z-50 shadow-2xl">
         <div class="max-w-7xl mx-auto space-y-4">
@@ -132,7 +148,7 @@
             </div>
 
             <div class="glass-panel overflow-hidden rounded-xl shadow-2xl relative border-t border-t-amber-500/30">
-                <table class="min-w-full divide-y divide-slate-800">
+                <div class="overflow-x-auto"><table class="min-w-full divide-y divide-slate-800">
                     <thead class="bg-slate-900/50">
                         <tr>
                             <th class="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Target MAC</th>
@@ -159,11 +175,11 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="5" class="px-6 py-12 text-center text-slate-500 font-mono text-sm tracking-widest">NO UNCLAIMED NODES DETECTED</td>
+                            <td colspan="5">{{ empty_state("No devices waiting to be claimed. Flash and power on a unit, then check back here.") }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
-                </table>
+                </table></div>
             </div>
         </section>
 
@@ -217,7 +233,7 @@
                                             <span class="text-xs font-mono text-slate-300">{{ compute_group.compute_module }}</span>
                                             <span class="text-[10px] text-slate-500 font-mono">{{ compute_group.count }} version(s)</span>
                                         </summary>
-                                        <table class="min-w-full divide-y divide-slate-800/50">
+                                        <div class="overflow-x-auto"><table class="min-w-full divide-y divide-slate-800/50">
                                             <thead class="bg-slate-900/30">
                                                 <tr>
                                                     <th class="pl-12 pr-6 py-2 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Version</th>
@@ -252,7 +268,7 @@
                                                 </tr>
                                                 {% endfor %}
                                             </tbody>
-                                        </table>
+                                        </table></div>
                                     </details>
                                     {% endfor %}
                                 </div>
@@ -261,7 +277,7 @@
                         </div>
                     </details>
                     {% else %}
-                    <p class="px-6 py-8 text-center text-slate-500 font-mono text-xs">No releases uploaded yet.</p>
+                    {{ empty_state("No approved releases yet. Upload a build, then approve it from the Release Queue.", "Upload Payload", "openUploadModal()") }}
                     {% endfor %}
                 </div>
             </div>
@@ -277,7 +293,7 @@
             </div>
 
             <div class="glass-panel overflow-hidden rounded-xl shadow-2xl border-t border-t-amber-500/30">
-                <table class="min-w-full divide-y divide-slate-800">
+                <div class="overflow-x-auto"><table class="min-w-full divide-y divide-slate-800">
                     <thead class="bg-slate-900/50">
                         <tr>
                             <th class="px-6 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Staging Build</th>
@@ -323,11 +339,11 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="6" class="px-6 py-8 text-center text-slate-500 font-mono">Nothing pending approval.</td>
+                            <td colspan="6">{{ empty_state("Nothing pending approval right now.") }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
-                </table>
+                </table></div>
             </div>
         </section>
 
@@ -364,7 +380,7 @@
                     <h3 class="text-xs font-bold text-slate-300 uppercase tracking-widest">One-Shot Release Catalog</h3>
                     <p class="text-[10px] text-slate-500 font-mono mt-1">Uploaded binaries for rapid testing and prototyping</p>
                 </div>
-                <table class="min-w-full divide-y divide-slate-800">
+                <div class="overflow-x-auto"><table class="min-w-full divide-y divide-slate-800">
                     <thead class="bg-slate-900/30">
                         <tr>
                             <th class="px-6 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Filename</th>
@@ -383,11 +399,11 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="4" class="px-6 py-8 text-center text-slate-500 font-mono">No releases uploaded yet.</td>
+                            <td colspan="4">{{ empty_state("No one-shot builds uploaded yet.", "Upload One-Shot", "openOneshotUploadModal()") }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
-                </table>
+                </table></div>
             </div>
         </section>
 
@@ -415,7 +431,7 @@
             </div>
 
             <div class="glass-panel overflow-hidden rounded-xl shadow-2xl text-sm relative border-t border-t-sky-500/30">
-                <table class="min-w-full divide-y divide-slate-800" id="devices-table">
+                <div class="overflow-x-auto"><table class="min-w-full divide-y divide-slate-800" id="devices-table">
                     <thead class="bg-slate-900/60">
                         <tr>
                             <th class="px-4 py-4 text-center text-xs font-bold text-slate-400 uppercase tracking-wider">
@@ -493,11 +509,11 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="10" class="px-6 py-12 text-center text-slate-500 font-mono text-sm tracking-widest">NO CLAIMED NODES IN YOUR SCOPE</td>
+                            <td colspan="10">{{ empty_state("No claimed devices in your scope yet. Claim one from the Onboard tab to get started.") }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
-                </table>
+                </table></div>
             </div>
 
         </section>
@@ -593,7 +609,7 @@
                     </div>
                 </div>
                 {% else %}
-                <p class="text-xs text-slate-600 font-mono py-4 text-center">No fleets configured.</p>
+                {{ empty_state("No fleets configured yet. Create one from Settings to start deploying firmware to a group.") }}
                 {% endfor %}
             </div>
         </section>
@@ -617,7 +633,7 @@
                     </div>
 
                     <div class="glass-panel overflow-hidden rounded-lg border border-slate-700/60">
-                        <table class="min-w-full divide-y divide-slate-800">
+                        <div class="overflow-x-auto"><table class="min-w-full divide-y divide-slate-800">
                             <thead class="bg-slate-900/50">
                                 <tr>
                                     <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tags</th>
@@ -653,15 +669,15 @@
                                 </tr>
                                 {% else %}
                                 <tr>
-                                    <td colspan="4" class="px-4 py-8 text-center text-slate-600 font-mono text-xs">No groups found.</td>
+                                    <td colspan="4">{{ empty_state("No groups found.") }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
-                        </table>
+                        </table></div>
                     </div>
                 </div>
                 {% else %}
-                <p class="text-xs text-slate-600 font-mono py-4 text-center">No fleet data yet.</p>
+                {{ empty_state("No fleet data yet. Claim a device and assign it to a fleet to see audit groups here.") }}
                 {% endfor %}
             </div>
         </section>
@@ -1854,10 +1870,11 @@
             }
 
             const submitBtn = form.querySelector('button[type="submit"]');
-            const originalLabel = submitBtn ? submitBtn.textContent : '';
+            const originalHtml = submitBtn ? submitBtn.innerHTML : '';
             if (submitBtn) {
                 submitBtn.disabled = true;
                 submitBtn.classList.add('opacity-60', 'cursor-not-allowed');
+                submitBtn.innerHTML = '<span class="inline-flex items-center justify-center gap-2"><svg class="animate-spin h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>' + originalHtml + '</span>';
             }
 
             try {
@@ -1898,7 +1915,7 @@
                 if (submitBtn) {
                     submitBtn.disabled = false;
                     submitBtn.classList.remove('opacity-60', 'cursor-not-allowed');
-                    submitBtn.textContent = originalLabel;
+                    submitBtn.innerHTML = originalHtml;
                 }
             }
         }
@@ -2207,6 +2224,7 @@
                     claimModalContent.classList.add('scale-100', 'opacity-100');
                 }
             }, 10);
+            focusFirstInput(claimModalContent);
         }
 
         function closeClaimModal() {
@@ -2312,6 +2330,7 @@
                     manageDeviceModalContent.classList.add('scale-100', 'opacity-100');
                 }
             }, 10);
+            focusFirstInput(manageDeviceModalContent);
         }
 
         function renderCategoryTags(input) {
@@ -2429,6 +2448,7 @@
                     uploadModalContent.classList.add('scale-100', 'opacity-100');
                 }
             }, 10);
+            focusFirstInput(uploadModalContent);
         }
 
         function closeUploadModal() {
@@ -2488,6 +2508,7 @@
                 input.dataset.selectedTags = JSON.stringify(selectedTags);
                 renderCategoryTags(input);
             });
+            focusFirstInput(firmwareTagModalContent);
         }
 
         function closeFirmwareTagModal() {
@@ -2528,6 +2549,7 @@
                     content.classList.add('scale-100', 'opacity-100');
                 }
             }, 10);
+            focusFirstInput(content);
 
             try {
                 const response = await fetch(`/api/releases/${releaseId}/suggest-version`, { credentials: 'same-origin' });
@@ -2645,36 +2667,8 @@
         });
 
         // Handle Escape Key for Modal
-        document.addEventListener('keydown', (e) => {
-            if(e.key === 'Escape' && claimModal && !claimModal.classList.contains('hidden')) {
-                closeClaimModal();
-            }
-            if (e.key === 'Escape' && uploadModal && !uploadModal.classList.contains('hidden')) {
-                closeUploadModal();
-            }
-            if (e.key === 'Escape' && manageDeviceModal && !manageDeviceModal.classList.contains('hidden')) {
-                closeManageDeviceModal();
-            }
-        });
-
-        // Background click close
-        claimModal?.addEventListener('click', (e) => {
-            if(e.target === claimModal) {
-                closeClaimModal();
-            }
-        });
-
-        uploadModal?.addEventListener('click', (e) => {
-            if (e.target === uploadModal) {
-                closeUploadModal();
-            }
-        });
-
-        manageDeviceModal?.addEventListener('click', (e) => {
-            if (e.target === manageDeviceModal) {
-                closeManageDeviceModal();
-            }
-        });
+        // Escape/backdrop-click for every modal is wired once, centrally,
+        // via MODAL_REGISTRY near the end of this script - see there for why.
 
         function refreshData(e) {
             const btn = e.currentTarget;
@@ -2689,25 +2683,27 @@
         function openBulkTagEdit() {
             const checked = document.querySelectorAll('.fleet-device-check:checked');
             if (checked.length === 0) return showToast('Select devices first.', 'error');
-            
+
             const macs = Array.from(checked).map(cb => cb.value);
             document.getElementById('bulk-tag-count').textContent = macs.length;
             document.getElementById('bulk-tag-mac-array').value = JSON.stringify(macs);
-            
+
+            // Class-based hidden/flex toggle, same as every other modal in
+            // this file - was previously inline style.display/opacity, which
+            // silently defeated MODAL_REGISTRY's classList-based open check.
             const modal = document.getElementById('bulk-tag-modal');
-            modal.style.display = 'flex';
-            modal.style.opacity = '0';
-            getComputedStyle(modal).height;
-            modal.style.opacity = '1';
-            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
             loadBulkTagOptions();
+            focusFirstInput(modal);
         }
 
         function closeBulkTagEdit() {
             const modal = document.getElementById('bulk-tag-modal');
-            modal.style.opacity = '0';
-            setTimeout(() => { modal.style.display = 'none'; }, 200);
-            
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+
             const msg = document.getElementById('bulk-tag-msg');
             msg.classList.add('hidden');
         }
@@ -3007,6 +3003,7 @@
                 input.dataset.selectedTags = JSON.stringify(selectedTags);
                 renderCategoryTags(input);
             });
+            focusFirstInput(fleetEditModalContent);
         }
 
         function closeFleetEditModal() {
@@ -3078,15 +3075,6 @@
             }
         });
 
-        fleetEditModal?.addEventListener('click', (e) => {
-            if (e.target === fleetEditModal) closeFleetEditModal();
-        });
-
-        // Close bulk modal on background click
-        document.getElementById('bulk-tag-modal')?.addEventListener('click', (e) => {
-            if (e.target === document.getElementById('bulk-tag-modal')) closeBulkTagEdit();
-        });
-
         // ====== ONE-SHOT UPLOAD MODAL ======
         const oneshotUploadModal = document.getElementById('oneshot-upload-modal');
         const oneshotUploadModalContent = document.getElementById('oneshot-upload-modal-content');
@@ -3102,6 +3090,7 @@
                     oneshotUploadModalContent.classList.add('scale-100', 'opacity-100');
                 }
             }, 10);
+            focusFirstInput(oneshotUploadModalContent);
         }
 
         function closeOneshotUploadModal() {
@@ -3117,9 +3106,7 @@
             }, 200);
         }
 
-        oneshotUploadModal?.addEventListener('click', (e) => {
-            if (e.target === oneshotUploadModal) closeOneshotUploadModal();
-        });
+
 
         // ====== ONE-SHOT SEARCH/FILTER/SORT ======
         function initOneshotSearchSort() {
@@ -3181,12 +3168,54 @@
             initFleetDeployPanel();
         });
 
-        // Escape key for oneshot modal
+        // ====== MODAL REGISTRY ======
+        // Single source of truth for Escape-to-close and click-backdrop-to-
+        // close, for every modal in this file. Before this, each modal's
+        // wiring was hand-added at its own call site - which is exactly how
+        // 4 of 8 modals ended up with no Escape handling and 2 with no
+        // backdrop-click at all, silently, with nothing to catch the gap.
+        // Adding a new modal to this array is now the only step needed to
+        // get both behaviors for free.
+        const MODAL_REGISTRY = [
+            { el: claimModal, close: closeClaimModal },
+            { el: manageDeviceModal, close: closeManageDeviceModal },
+            { el: document.getElementById('firmware-tag-modal'), close: closeFirmwareTagModal },
+            { el: document.getElementById('approve-release-modal'), close: closeApproveModal },
+            { el: uploadModal, close: closeUploadModal },
+            { el: oneshotUploadModal, close: closeOneshotUploadModal },
+            { el: document.getElementById('fleet-edit-modal'), close: closeFleetEditModal },
+            { el: document.getElementById('bulk-tag-modal'), close: closeBulkTagEdit },
+        ];
+
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && oneshotUploadModal && !oneshotUploadModal.classList.contains('hidden')) {
-                closeOneshotUploadModal();
+            if (e.key !== 'Escape') return;
+            for (const { el, close } of MODAL_REGISTRY) {
+                if (el && !el.classList.contains('hidden')) {
+                    close();
+                    return; // only the top-most open modal (bulk-tag-modal's z-[110] sits above the rest)
+                }
             }
         });
+
+        MODAL_REGISTRY.forEach(({ el, close }) => {
+            el?.addEventListener('click', (e) => {
+                if (e.target === el) close();
+            });
+        });
+
+        // Auto-focus the first real input when a modal opens (skips hidden,
+        // readonly, and file inputs - the last because browsers won't pop
+        // the file picker from a programmatic focus anyway, so focusing it
+        // would just be a visual no-op ahead of a more useful field).
+        function focusFirstInput(modalContentEl) {
+            if (!modalContentEl) return;
+            const el = modalContentEl.querySelector(
+                'input:not([type="hidden"]):not([type="file"]):not([readonly]), select, textarea'
+            );
+            if (el) {
+                setTimeout(() => el.focus(), 60);
+            }
+        }
     </script>
 </body>
 </html>
