@@ -343,6 +343,34 @@ def purge_unclaimed_devices(
     return JSONResponse(status_code=200, content={"message": "Unclaimed devices purged.", "deleted": deleted})
 
 
+@router.post("/api/devices/{mac}/force-update")
+def force_update(
+    mac: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """
+    Arm a one-shot bypass of the device's fleet's update_policy for its
+    next check-in only. Does not change what firmware resolves - only
+    whether the fleet-level AFTER_HOURS/NOTIFY_ONLY gate applies this once.
+    Has no effect if the device targets firmware directly (that path
+    already ignores fleet policy) or has no fleet.
+    """
+    _ = current_user
+    device = db.query(Device).filter(Device.mac_address == mac).first()
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found.")
+    if not device.claimed:
+        raise HTTPException(status_code=400, detail="Cannot force-update an unclaimed device.")
+
+    device.force_update_requested = True
+    db.commit()
+    return JSONResponse(status_code=200, content={
+        "message": f"Force-update armed for {mac} - takes effect on its next check-in.",
+        "mac_address": device.mac_address,
+    })
+
+
 # =============================================================================
 # Bulk Device Tag Editing
 # =============================================================================

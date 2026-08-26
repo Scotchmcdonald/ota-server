@@ -32,6 +32,21 @@
 </head>
 <body class="antialiased min-h-screen font-sans flex flex-col selection:bg-sky-500/30">
 
+    {# Tag taxonomy: is:/has: name a physical truth about the hardware/binary
+       (blue/indigo). loc:/env:/does: name an organizational truth - where it
+       lives, what mode it's in, what job it does (green/emerald). Anything
+       else falls back to the tag's own stored color, unchanged. #}
+    {% macro tag_pill(tag, extra_classes="") %}
+        {% set prefix = tag.name.split(':')[0] ~ ':' if ':' in tag.name else '' %}
+        {% if prefix in ['is:', 'has:'] %}
+        <span class="px-1.5 py-0.5 text-[8px] font-bold rounded bg-indigo-950/40 text-indigo-300 border border-indigo-700/50 uppercase {{ extra_classes }}" title="{{ tag.category or 'custom' }}: {{ tag.name }} (physical)">{{ tag.name }}</span>
+        {% elif prefix in ['loc:', 'env:', 'does:'] %}
+        <span class="px-1.5 py-0.5 text-[8px] font-bold rounded bg-emerald-950/40 text-emerald-300 border border-emerald-700/50 uppercase {{ extra_classes }}" title="{{ tag.category or 'custom' }}: {{ tag.name }} (organizational)">{{ tag.name }}</span>
+        {% else %}
+        <span class="px-1.5 py-0.5 text-[8px] font-bold rounded bg-slate-800 text-slate-300 border border-slate-700 uppercase {{ extra_classes }}" style="border-left: 2px solid {{ tag.color or '#3b82f6' }};" title="{{ tag.category or 'custom' }}: {{ tag.name }}">{{ tag.name }}</span>
+        {% endif %}
+    {% endmacro %}
+
     <!-- --------------------------- NAVBAR --------------------------- -->
     <nav class="bg-slate-900/90 backdrop-blur border-b border-slate-800 p-4 sticky top-0 z-50 shadow-2xl">
         <div class="max-w-7xl mx-auto space-y-4">
@@ -187,7 +202,7 @@
                                     <svg class="w-3 h-3 text-sky-400 transition-transform group-open/tags:rotate-90 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
                                     <div class="flex gap-1.5 flex-wrap items-center">
                                         {% for tag in tag_group.tags %}
-                                        <span class="px-1.5 py-0.5 text-[8px] font-bold rounded bg-slate-800 text-slate-300 border border-slate-700 uppercase" style="border-left: 2px solid {{ tag.color or '#3b82f6' }};" title="{{ tag.category or 'custom' }}: {{ tag.name }}">{{ tag.name }}</span>
+                                        {{ tag_pill(tag) }}
                                         {% else %}
                                         <span class="text-slate-500 text-[10px] font-mono">No Tags</span>
                                         {% endfor %}
@@ -507,7 +522,7 @@
                         </div>
                         <div class="flex gap-1.5 flex-wrap">
                             {% for tag in (fleet.tags or []) %}
-                            <span class="px-1.5 py-0.5 text-[8px] font-bold rounded bg-slate-800 text-slate-300 border border-slate-700 uppercase" style="border-left: 2px solid {{ tag.color or '#3b82f6' }};" title="{{ tag.category or 'custom' }}: {{ tag.name }}">{{ tag.name }}</span>
+                            {{ tag_pill(tag) }}
                             {% endfor %}
                         </div>
                     </div>
@@ -1036,7 +1051,7 @@
                                     <p class="text-[10px] font-mono text-slate-400">{{ fleet.devices|length }} device(s)</p>
                                 </div>
                                 <div class="flex gap-2">
-                                    <button onclick="openFleetEditModal({{ fleet.id|tojson }}, {{ fleet.name|tojson }}, {{ (fleet.description or '')|tojson }}, {{ (fleet.tags|default([]))|tojson }})" class="text-[10px] font-bold tracking-wider uppercase text-sky-300 hover:text-white border border-sky-900/50 bg-sky-950/30 hover:bg-sky-600 px-2 py-1 rounded transition-all">Edit</button>
+                                    <button onclick="openFleetEditModal({{ fleet.id|tojson }}, {{ fleet.name|tojson }}, {{ (fleet.description or '')|tojson }}, {{ (fleet_tags_flat.get(fleet.id, []))|tojson }})" class="text-[10px] font-bold tracking-wider uppercase text-sky-300 hover:text-white border border-sky-900/50 bg-sky-950/30 hover:bg-sky-600 px-2 py-1 rounded transition-all">Edit</button>
                                     <form action="/admin/fleets/delete/{{ fleet.id }}" method="POST" class="inline admin-guard-form" data-confirm="Delete fleet {{ fleet.name }}?" data-success-redirect="/dashboard?top=settings&sub=fleets">
                                         <button type="submit" class="text-[10px] font-bold tracking-wider uppercase text-rose-400 hover:text-white border border-rose-900/50 bg-rose-950/30 hover:bg-rose-600 px-2 py-1 rounded transition-all">Delete</button>
                                     </form>
@@ -1334,7 +1349,8 @@
 
                 <div>
                     <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Tags</label>
-                    <p class="text-[10px] text-slate-500 mb-2">Hardware type is immutable, set at claim. Suggestions below are pulled from other devices in the selected fleet.</p>
+                    <p class="text-[10px] text-slate-500 mb-2">Hardware type is immutable, set at claim. "Inherited" chips come from the fleet's own tags and apply automatically - editing them here does nothing; edit the fleet itself in Settings. Suggestions are pulled from other devices in the selected fleet - click to add.</p>
+                    <p class="text-[10px] text-slate-600 mb-2 font-mono">Convention: <span class="text-indigo-400">is:</span> / <span class="text-indigo-400">has:</span> for physical facts (firmware, devices) &middot; <span class="text-emerald-400">loc:</span> / <span class="text-emerald-400">env:</span> / <span class="text-emerald-400">does:</span> for organizational facts (fleets)</p>
                     <div class="space-y-3">
                         {% for cat in tag_categories|default(["hardware", "firmware_compat", "firmware_feature", "firmware_build", "role", "custom"]) if cat != "hardware" %}
                         <div>
@@ -1349,6 +1365,7 @@
                                     <button type="button" class="tag-create-btn px-1.5 py-1 text-[9px] text-amber-300 hover:text-amber-200 transition-colors" data-category="{{ cat }}">[New]</button>
                                 </div>
                             </div>
+                            <div class="tag-inherited flex gap-1.5 flex-wrap items-center mt-1 ml-[103px] empty:hidden" data-category="{{ cat }}"></div>
                             <div class="tag-suggestions flex gap-1.5 flex-wrap mt-1 ml-[103px] empty:hidden" data-category="{{ cat }}"></div>
                         </div>
                         {% endfor %}
@@ -1917,6 +1934,41 @@
 
         const firmwareVersionsByName = {{ firmware_versions_by_name | tojson }};
         const fleetTagSuggestions = {{ fleet_tag_suggestions | tojson }};
+        const fleetOwnTags = {{ fleet_own_tags | tojson }};
+
+        // Mirrors the tag_pill Jinja macro's prefix convention, for chips
+        // that are rendered client-side (device's own editable tags,
+        // inherited fleet tags, suggestions) rather than server-rendered.
+        function taxonomyExtraClasses(tagName) {
+            const prefix = tagName.includes(':') ? tagName.split(':')[0] + ':' : '';
+            if (['is:', 'has:'].includes(prefix)) return 'bg-indigo-950/40 text-indigo-300 border-indigo-700/50';
+            if (['loc:', 'env:', 'does:'].includes(prefix)) return 'bg-emerald-950/40 text-emerald-300 border-emerald-700/50';
+            return 'bg-slate-800 text-slate-300 border-slate-700';
+        }
+
+        function refreshInheritedFleetTags() {
+            const fleetSelect = document.getElementById('manage-device-fleet');
+            const fleetId = fleetSelect ? fleetSelect.value : '';
+            const byCategory = fleetOwnTags[fleetId] || {};
+
+            document.querySelectorAll('#manage-device-modal .tag-inherited').forEach(container => {
+                const cat = container.dataset.category;
+                container.innerHTML = '';
+                (byCategory[cat] || []).forEach(tag => {
+                    const chip = document.createElement('span');
+                    chip.className = `px-1.5 py-0.5 text-[8px] font-bold rounded border uppercase opacity-50 italic ${taxonomyExtraClasses(tag.name)}`;
+                    chip.title = `Inherited from fleet - edit the fleet in Settings to change`;
+                    chip.textContent = tag.name;
+                    container.appendChild(chip);
+                });
+                if ((byCategory[cat] || []).length > 0) {
+                    const label = document.createElement('span');
+                    label.className = 'text-[8px] text-slate-600 uppercase tracking-wider';
+                    label.textContent = 'inherited';
+                    container.insertBefore(label, container.firstChild);
+                }
+            });
+        }
 
         function refreshFleetTagSuggestions() {
             const fleetSelect = document.getElementById('manage-device-fleet');
@@ -1932,11 +1984,15 @@
 
                 container.innerHTML = '';
                 suggestions.forEach(tag => {
+                    const prefix = tag.name.includes(':') ? tag.name.split(':')[0] + ':' : '';
+                    const accentColor = ['is:', 'has:'].includes(prefix) ? '#6366f1'
+                        : ['loc:', 'env:', 'does:'].includes(prefix) ? '#10b981'
+                        : (tag.color || '#3b82f6');
                     const chip = document.createElement('button');
                     chip.type = 'button';
                     chip.className = 'px-1.5 py-0.5 text-[8px] font-bold rounded bg-slate-800/60 text-slate-400 border border-dashed border-slate-600 hover:border-amber-500 hover:text-amber-300 transition-colors';
                     chip.style.borderLeftWidth = '2px';
-                    chip.style.borderLeftColor = tag.color || '#3b82f6';
+                    chip.style.borderLeftColor = accentColor;
                     chip.textContent = `+ ${tag.name}`;
                     chip.addEventListener('click', () => {
                         if (!input) return;
@@ -1955,7 +2011,10 @@
 
         const manageDeviceFleetSelect = document.getElementById('manage-device-fleet');
         if (manageDeviceFleetSelect) {
-            manageDeviceFleetSelect.addEventListener('change', refreshFleetTagSuggestions);
+            manageDeviceFleetSelect.addEventListener('change', () => {
+                refreshFleetTagSuggestions();
+                refreshInheritedFleetTags();
+            });
         }
 
         // Refresh the device manage modal datalist when the firmware name changes
@@ -2235,6 +2294,7 @@
             if (heartbeatDisplay) heartbeatDisplay.textContent = heartbeatInterval ? `${heartbeatInterval}s` : 'not yet reported';
 
             refreshFleetTagSuggestions();
+            refreshInheritedFleetTags();
 
             if (manageDeviceForm) {
                 const encodedMac = encodeURIComponent(mac || '');
@@ -2262,9 +2322,11 @@
             container.innerHTML = '';
             
             selected.forEach((tag, idx) => {
+                const prefix = tag.name.includes(':') ? tag.name.split(':')[0] + ':' : '';
+                const isTaxonomy = ['is:', 'has:', 'loc:', 'env:', 'does:'].includes(prefix);
                 const el = document.createElement('span');
-                el.className = 'inline-flex items-center gap-1 px-1.5 py-0.5 text-[8px] font-bold rounded bg-slate-800 text-slate-300 border border-slate-700 mr-1';
-                el.style.borderLeft = `2px solid ${tag.color || '#3b82f6'}`;
+                el.className = `inline-flex items-center gap-1 px-1.5 py-0.5 text-[8px] font-bold rounded border mr-1 ${taxonomyExtraClasses(tag.name)}`;
+                if (!isTaxonomy) el.style.borderLeft = `2px solid ${tag.color || '#3b82f6'}`;
                 el.innerHTML = `<span>${tag.name}</span><button type="button" class="text-slate-500 hover:text-rose-400 ml-0.5" data-remove-idx="${idx}">&times;</button>`;
                 container.appendChild(el);
             });

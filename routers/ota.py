@@ -9,8 +9,8 @@ from packaging.version import parse as parse_version
 from sqlalchemy.orm import Session
 
 from database import get_db, FIRMWARE_DIR
-from utils import is_newer_version, _tag_gap
-from models import Device, OneShotRelease, VersionedRelease, ReleaseStatus, UpdateMode
+from utils import is_newer_version, _tag_gap, _effective_device_tags
+from models import Device, OneShotRelease, VersionedRelease, ReleaseStatus, UpdateMode, DeviceUpdateStatus, FleetUpdatePolicy
 
 router = APIRouter()
 
@@ -53,6 +53,7 @@ def check_update(
 
     # Step 3: Update telemetry
     device.last_checkin = datetime.utcnow()
+    device.current_firmware_name = x_firmware_name or device.current_firmware_name
     device.current_firmware_version = x_firmware_version
     if x_compute_module:
         device.compute_module = x_compute_module
@@ -66,13 +67,22 @@ def check_update(
             device.heartbeat_interval = int(x_heartbeat_interval)
         except ValueError:
             pass
+
+    # Confirm a previously-dispatched update: if the device now reports
+    # exactly the version we last sent it, the OTA succeeded. Resolution
+    # below will naturally return 204 for this same case (not newer than
+    # what's already installed) - this just records that outcome.
+    if device.pending_firmware_version and x_firmware_version == device.pending_firmware_version:
+        device.update_status = DeviceUpdateStatus.SUCCESS
+        device.pending_firmware_version = None
+
     db.commit()
 
     # Step 4/5: Resolution (Priority 0, 1)
     name = ""
     version = None
     update_mode = UpdateMode.LATEST
-    target_tags: set = set()
+    target_tags: set = _effective_device_tags(device)
     resolved_release = None
     oneshot_release = None
 
@@ -98,12 +108,22 @@ def check_update(
                 headers={"X-Firmware-Version": "oneshot"},
             )
 
+    # Consume the force-update flag now, exactly once, regardless of what
+    # happens below - it's a one-shot bypass for this single check-in, not
+    # a standing override.
+    bypass_policy = device.force_update_requested
+    if bypass_policy:
+        device.force_update_requested = False
+        db.commit()
+
     # Priority 1: resolve effective target
     if device.target_firmware_name:
+        # Device-level override: intentionally bypasses fleet targeting
+        # AND fleet update_policy - it's meant as an explicit "do this
+        # specific thing regardless of the fleet's rollout schedule" pin.
         name = device.target_firmware_name
         version = device.target_firmware_version or None
         update_mode = device.update_mode or UpdateMode.LATEST
-        target_tags = {t.name for t in (device.tags or [])}
     elif device.fleet:
         fleet = device.fleet
         # Fleet-level one-shot pin
@@ -129,19 +149,24 @@ def check_update(
                         filename=fleet_oneshot.filename,
                         headers={"X-Firmware-Version": "oneshot"},
                     )
-        # Fleet-level firmware targeting
+        # Fleet-level firmware targeting - gated by the fleet's rollout
+        # policy, unless this check-in is consuming a force-update.
         if fleet.target_firmware_name:
+            if not bypass_policy:
+                if fleet.update_policy == FleetUpdatePolicy.NOTIFY_ONLY:
+                    return Response(status_code=204)
+                if fleet.update_policy == FleetUpdatePolicy.AFTER_HOURS:
+                    if not (0 <= datetime.utcnow().hour < 5):
+                        return Response(status_code=204)
             name = fleet.target_firmware_name
             version = fleet.target_firmware_version or None
             update_mode = fleet.update_mode or UpdateMode.LATEST
-            target_tags = {t.name for t in (device.tags or [])}
     else:
         # Fallback: device-reported firmware name in LATEST mode
         if x_firmware_name:
             name = x_firmware_name
             version = None
             update_mode = UpdateMode.LATEST
-            target_tags = set()
 
     if not name:
         return Response(status_code=204)
@@ -184,6 +209,8 @@ def check_update(
         return Response(status_code=204)
 
     device.last_ota_status = f"update_dispatched-{name}-{resolved_release.firmware_version}"
+    device.update_status = DeviceUpdateStatus.DOWNLOADING
+    device.pending_firmware_version = resolved_release.firmware_version
     db.commit()
 
     return FileResponse(

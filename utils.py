@@ -107,6 +107,19 @@ def _normalize_firmware_version(value: Optional[str]) -> str:
     return (value or "").strip()
 
 
+def _effective_device_tags(device: Device) -> set:
+    """
+    A device's effective tag set for matching purposes: its own tags plus
+    its fleet's tags, unioned. This is computed at read-time, never
+    persisted - a device's own tags never change when it moves fleets, and
+    the fleet's contribution updates automatically the moment fleet_id
+    changes, with no sync/cascade logic needed anywhere.
+    """
+    own = {t.name for t in (device.tags or [])}
+    fleet_tags = {t.name for t in (device.fleet.tags or [])} if device.fleet else set()
+    return own | fleet_tags
+
+
 def _tag_gap(required_tag_names: set, actual_tag_names: set) -> dict:
     """Compute missing/extra tags between a target (required) and a source (actual)."""
     missing_tags = sorted(required_tag_names - actual_tag_names)

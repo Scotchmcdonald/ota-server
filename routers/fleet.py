@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from deps import require_admin, _scope_slug, _resolve_scope_selection
-from utils import _tag_gap
+from utils import _tag_gap, _effective_device_tags
 from schemas import DeployPreviewRequest
 from models import Fleet, Device, VersionedRelease, Tag, ReleaseStatus, UpdateMode, ScopeType, User
 
@@ -158,7 +158,7 @@ def _compute_gap_summary(devices, releases):
     exact_count = drift_count = blocked_count = 0
 
     for dev in devices:
-        dev_tag_names = {t.name for t in (dev.tags or [])}
+        dev_tag_names = _effective_device_tags(dev)
         matching_release = next((r for r in releases if r.compute_module == dev.compute_module), None)
         if matching_release is None:
             gap = {"subset_match": False, "exact_match": False, "missing_tags": [], "extra_tags": sorted(dev_tag_names)}

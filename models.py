@@ -26,6 +26,18 @@ class UpdateMode(enum.Enum):
     LATEST = "LATEST"  # Device/Fleet always tracks the newest matching release.
     FIXED = "FIXED"    # Device/Fleet targets one specific firmware name + version.
 
+class DeviceUpdateStatus(enum.Enum):
+    IDLE = "IDLE"                # No update in flight.
+    DOWNLOADING = "DOWNLOADING"  # Server just dispatched a binary; awaiting confirmation.
+    SUCCESS = "SUCCESS"          # Device's next check-in reported the version we dispatched.
+    FAILED = "FAILED"            # Not set automatically anywhere - the firmware protocol has
+                                  # no failure callback. Reserved for admin/future use.
+
+class FleetUpdatePolicy(enum.Enum):
+    IMMEDIATE = "IMMEDIATE"      # No gating - serve as soon as a match resolves.
+    AFTER_HOURS = "AFTER_HOURS"  # Only serve fleet-level targets between 00:00-05:00 server time.
+    NOTIFY_ONLY = "NOTIFY_ONLY"  # Never auto-serve fleet-level targets; needs a force-update.
+
 # =============================================================================
 # Association Tables
 # =============================================================================
@@ -122,10 +134,23 @@ class Device(Base):
     last_checkin = Column(DateTime, default=datetime.utcnow)
     last_ota_status = Column(String)
 
-    # Currently-installed firmware version, self-reported by the device on
-    # every check-in. Used for dashboard display and fleet audit history.
+    # Currently-installed firmware name + version, self-reported by the
+    # device on every check-in. Used for dashboard display and fleet audit
+    # history.
+    current_firmware_name = Column(String, nullable=True)
     current_firmware_version = Column(String, nullable=True)
-    
+
+    # OTA rollout status. DOWNLOADING/SUCCESS are set by comparing what was
+    # last dispatched (pending_firmware_version) against what the device
+    # reports on its next check-in - see routers/ota.py.
+    update_status = Column(Enum(DeviceUpdateStatus), default=DeviceUpdateStatus.IDLE, nullable=False)
+    pending_firmware_version = Column(String, nullable=True)
+
+    # One-shot admin override: set by POST /api/devices/{mac}/force-update
+    # to bypass the Fleet's update_policy gate on this device's next
+    # check-in, then cleared automatically.
+    force_update_requested = Column(Boolean, default=False, nullable=False)
+
     # Ownership & Claiming
     claimed = Column(Boolean, default=False, nullable=False)
     scope_id = Column(Integer, nullable=True, index=True)
@@ -164,6 +189,11 @@ class Fleet(Base):
     update_mode = Column(Enum(UpdateMode), default=UpdateMode.LATEST, nullable=False)
     target_firmware_name = Column(String, nullable=True)
     target_firmware_version = Column(String, nullable=True)
+
+    # Rollout policy gating when a device resolves its update via THIS
+    # fleet's target (device-level overrides bypass this entirely, by
+    # design - a device-level pin is meant to ignore fleet rollout timing).
+    update_policy = Column(Enum(FleetUpdatePolicy), default=FleetUpdatePolicy.IMMEDIATE, nullable=False)
 
     # Direct assignment to a One-Shot release (same reason as on Device).
     target_oneshot_release_id = Column(Integer, ForeignKey("one_shot_releases.id", ondelete="SET NULL"), nullable=True)

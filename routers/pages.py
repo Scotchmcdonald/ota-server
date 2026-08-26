@@ -268,6 +268,23 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     new_key  = request.session.pop("new_key_flash", None)
     new_key_token_id = request.session.pop("new_key_token_id_flash", None)
     fleets = db.query(Fleet).order_by(Fleet.name.asc()).all()
+
+    # The fleet's OWN tags (Fleet.tags) - distinct from fleet_tag_suggestions
+    # above, which is tags used by sibling *devices*. This is what a device
+    # actually inherits into its effective tag set (see
+    # utils._effective_device_tags), grouped by category to mirror the
+    # device tag editor's layout.
+    fleet_own_tags = {}
+    fleet_tags_flat = {}
+    for f in fleets:
+        by_cat: dict = defaultdict(list)
+        flat = []
+        for t in (f.tags or []):
+            by_cat[t.category or "custom"].append({"name": t.name, "color": t.color})
+            flat.append({"name": t.name, "category": t.category, "color": t.color})
+        fleet_own_tags[str(f.id)] = dict(by_cat)
+        fleet_tags_flat[f.id] = flat
+
     compute_modules = db.query(ComputeModule).order_by(ComputeModule.name.asc()).all()
     all_tags = db.query(Tag).order_by(Tag.category.asc(), Tag.name.asc()).all()
     one_shot_releases = db.query(OneShotRelease).order_by(OneShotRelease.id.desc()).all()
@@ -320,6 +337,8 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             "scope_options":        scope_options,
             "fleet_nodes":          fleet_nodes,
             "fleet_tag_suggestions": fleet_tag_suggestions_output,
+            "fleet_own_tags":       fleet_own_tags,
+            "fleet_tags_flat":      fleet_tags_flat,
             "fleet_audit":          fleet_audit_output,
             "unclaimed_devices":    unclaimed_rows,
             "allowed_emails":       allowed_emails,
